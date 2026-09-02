@@ -53,16 +53,15 @@ require_once __DIR__ . '/includes/header.php';
 
             <div class="flex flex-col sm:flex-row gap-2.5 sm:items-center">
                 <!-- Large Thumb Primary CTA (Fitts's Law) -->
-                <a href="record_deposit.php" class="btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-sm font-extrabold shadow-lg transition">
-                    <svg class="w-5 h-5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/>
-                    </svg>
-                    Record Deposit
+                <a href="record_deposit.php" class="btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-sm font-extrabold shadow-lg transition flex items-center">
+                    <i class="fa-solid fa-circle-plus mr-1.5"></i>
+                    <span>Record Deposit</span>
                 </a>
 
                 <!-- Secondary CTA (Hick's Law: Visually lighter) -->
-                <a href="daily_handover.php" class="btn-touch bg-white/10 hover:bg-white/20 text-white border border-white/25 text-xs font-bold transition">
-                    Handover Cash
+                <a href="daily_handover.php" class="btn-touch bg-white/10 hover:bg-white/20 text-white border border-white/25 text-xs font-bold transition flex items-center">
+                    <i class="fa-solid fa-handshake mr-1.5"></i>
+                    <span>Handover Cash</span>
                 </a>
             </div>
         </div>
@@ -98,7 +97,9 @@ require_once __DIR__ . '/includes/header.php';
 
         <div id="search_empty_notice" class="hidden">
             <div class="empty-state">
-                <div class="empty-state-icon bg-slate-100">🔍</div>
+                <div class="empty-state-icon bg-slate-100 text-slate-400">
+                    <i class="fa-solid fa-magnifying-glass text-xl"></i>
+                </div>
                 <div class="empty-state-title">No Matches Found</div>
                 <div class="empty-state-text">Try a different search term.</div>
             </div>
@@ -108,7 +109,9 @@ require_once __DIR__ . '/includes/header.php';
         <div class="space-y-3">
             <?php if (empty($myCustomers)): ?>
                 <div class="empty-state">
-                    <div class="empty-state-icon bg-blue-50">👥</div>
+                    <div class="empty-state-icon bg-blue-50 text-steel_azure">
+                        <i class="fa-solid fa-users text-2xl"></i>
+                    </div>
                     <div class="empty-state-title">No Assigned Customers</div>
                     <div class="empty-state-text">You do not have any assigned customers yet. Please check with the Admin to get clients assigned to your route.</div>
                 </div>
@@ -127,8 +130,8 @@ require_once __DIR__ . '/includes/header.php';
                             </div>
                             
                             <div class="text-xs text-slate-500 mt-1 flex flex-wrap gap-x-3 gap-y-1">
-                                <span>📍 <?= htmlspecialchars($cust['location'] ?: 'No location') ?></span>
-                                <span>📞 <?= htmlspecialchars($cust['phone']) ?></span>
+                                <span><i class="fa-solid fa-location-dot text-slate-400 mr-1"></i><?= htmlspecialchars($cust['location'] ?: 'No location') ?></span>
+                                <span><i class="fa-solid fa-phone text-slate-400 mr-1"></i><?= htmlspecialchars($cust['phone']) ?></span>
                             </div>
 
                             <!-- Card Progress -->
@@ -151,7 +154,7 @@ require_once __DIR__ . '/includes/header.php';
                                 </div>
                             <?php else: ?>
                                 <div class="mt-2 text-xs font-semibold text-amber-600 flex items-center gap-1.5">
-                                    <span>⚠️</span> No active card. Admin can start a new card.
+                                    <i class="fa-solid fa-triangle-exclamation mr-1"></i> No active card. Admin can start a new card.
                                 </div>
                             <?php endif; ?>
                         </div>
@@ -160,12 +163,14 @@ require_once __DIR__ . '/includes/header.php';
                         <div class="flex items-center gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-silver-600/40">
                             <?php if ($cust['card_id']): ?>
                                 <a href="record_deposit.php?customer_id=<?= $cust['id'] ?>" 
-                                   class="btn-touch flex-1 sm:flex-none bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold px-3 py-2 shadow-sm transition">
-                                    Deposit
+                                   class="btn-touch flex-1 sm:flex-none bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold px-3 py-2 shadow-sm transition flex items-center justify-center gap-1">
+                                    <i class="fa-solid fa-plus text-xs"></i>
+                                    <span>Deposit</span>
                                 </a>
                                 <a href="view_card.php?id=<?= $cust['card_id'] ?>" 
-                                   class="btn-touch flex-1 sm:flex-none bg-white hover:bg-platinum text-steel_azure border border-steel_azure text-xs font-bold px-3 py-2 transition">
-                                    Card
+                                   class="btn-touch flex-1 sm:flex-none bg-white hover:bg-platinum text-steel_azure border border-steel_azure text-xs font-bold px-3 py-2 transition flex items-center justify-center gap-1">
+                                    <i class="fa-solid fa-id-card text-xs"></i>
+                                    <span>Card</span>
                                 </a>
                             <?php endif; ?>
                         </div>
