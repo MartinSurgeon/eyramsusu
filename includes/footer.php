@@ -99,7 +99,7 @@
         </div>
     </footer>
 
-    <!-- App JavaScript -->
-    <script src="assets/js/app.js?v=<?= filemtime(__DIR__ . '/../assets/js/app.js') ?>"></script>
+    <!-- App JavaScript (Auto-resolves assets/js/ or js/) -->
+    <script src="<?= get_asset_url('js') ?>"></script>
 </body>
 </html>

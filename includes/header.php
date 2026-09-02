@@ -115,8 +115,35 @@ function ariaCurrent($page, $currentPage) {
         }
     </script>
     
-    <!-- Custom Eyram Susu Passbook Theme -->
-    <link rel="stylesheet" href="assets/css/custom.css?v=<?= filemtime(__DIR__ . '/../assets/css/custom.css') ?>">
+    <!-- Google Fonts Preload -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Custom Eyram Susu Passbook Theme (Auto-resolves assets/css/ or css/) -->
+    <link rel="stylesheet" href="<?= get_asset_url('css') ?>">
+
+    <!-- Critical Layout & Anti-FOUC Fallback Styles -->
+    <style>
+        .notification-dropdown { display: none !important; }
+        .notification-dropdown.open { display: block !important; }
+        #app_sidebar {
+            background: linear-gradient(180deg, #07172b 0%, #0c2340 50%, #07172b 100%) !important;
+            color: #94a3b8 !important;
+        }
+        #app_sidebar .sidebar-link {
+            color: #94a3b8;
+        }
+        #app_sidebar .sidebar-link:hover {
+            color: #ffffff;
+            background: rgba(255, 255, 255, 0.08);
+        }
+        #app_sidebar .sidebar-link.active {
+            color: #ffffff;
+            background: linear-gradient(135deg, rgba(0, 78, 152, 0.85) 0%, rgba(0, 114, 206, 0.7) 100%);
+        }
+    </style>
+
     <script>
     (function() {
         try {
@@ -133,7 +160,7 @@ function ariaCurrent($page, $currentPage) {
 <div class="min-h-screen flex flex-row w-full bg-slate-50">
 
     <!-- Desktop Collapsible Sidebar (HCI: Predictable & Expandable) -->
-    <aside id="app_sidebar" class="hidden md:flex flex-col min-h-screen z-40 border-r border-slate-800/80 sticky top-0 h-screen select-none overflow-y-auto overflow-x-hidden flex-shrink-0" aria-label="Sidebar navigation">
+    <aside id="app_sidebar" class="hidden md:flex flex-col min-h-screen z-40 border-r border-slate-800/80 sticky top-0 h-screen select-none overflow-y-auto overflow-x-hidden flex-shrink-0 bg-[#07172b] text-slate-300" style="background: linear-gradient(180deg, #07172b 0%, #0c2340 50%, #07172b 100%); color: #94a3b8;" aria-label="Sidebar navigation">
         
         <!-- Sidebar Brand & Toggle Bar -->
         <div class="p-4 border-b border-slate-800/80 flex items-center justify-between h-17 flex-shrink-0">

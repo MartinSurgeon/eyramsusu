@@ -61,7 +61,10 @@ $pageTitle = "Login";
             }
         }
     </script>
-    <link rel="stylesheet" href="assets/css/custom.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="<?= get_asset_url('css') ?>">
 </head>
 <body class="h-full flex items-center justify-center p-4">
 
@@ -130,6 +133,6 @@ $pageTitle = "Login";
         </p>
     </div>
 
-    <script src="assets/js/app.js"></script>
+    <script src="<?= get_asset_url('js') ?>"></script>
 </body>
 </html>

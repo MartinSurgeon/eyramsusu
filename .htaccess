@@ -1,0 +1,23 @@
+# Eyram Susu Apache / LiteSpeed Configuration
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Prevent directory listing
+    Options -Indexes
+
+    # Route /assets/css/ to /css/ if assets folder doesn't exist
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^assets/css/(.*)$ css/$1 [L,QSA]
+
+    # Route /assets/js/ to /js/ if assets folder doesn't exist
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^assets/js/(.*)$ js/$1 [L,QSA]
+
+    # Route /css/ to /assets/css/ if inside assets
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^css/(.*)$ assets/css/$1 [L,QSA]
+
+    # Route /js/ to /assets/js/ if inside assets
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^js/(.*)$ assets/js/$1 [L,QSA]
+</IfModule>

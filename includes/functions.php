@@ -283,3 +283,27 @@ function mark_all_notifications_read($userId, $userRole = 'collector') {
     }
 }
 
+/**
+ * Auto-detects and returns valid URL path for CSS or JS assets,
+ * supporting both /assets/css/ and flattened /css/ structures with cache busting.
+ */
+function get_asset_url($assetType = 'css') {
+    $rootDir = dirname(__DIR__);
+    if ($assetType === 'css') {
+        if (file_exists($rootDir . '/assets/css/custom.css')) {
+            return 'assets/css/custom.css?v=' . filemtime($rootDir . '/assets/css/custom.css');
+        } elseif (file_exists($rootDir . '/css/custom.css')) {
+            return 'css/custom.css?v=' . filemtime($rootDir . '/css/custom.css');
+        }
+        return 'css/custom.css';
+    } elseif ($assetType === 'js') {
+        if (file_exists($rootDir . '/assets/js/app.js')) {
+            return 'assets/js/app.js?v=' . filemtime($rootDir . '/assets/js/app.js');
+        } elseif (file_exists($rootDir . '/js/app.js')) {
+            return 'js/app.js?v=' . filemtime($rootDir . '/js/app.js');
+        }
+        return 'js/app.js';
+    }
+    return '';
+}
+
