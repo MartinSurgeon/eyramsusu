@@ -20,6 +20,17 @@ if ($currentUser) {
     $userNotifications = get_user_notifications($currentUser['id'], $currentUser['role'], 10);
 }
 
+// Compute user initials for avatar
+$userInitials = 'U';
+if ($currentUser && !empty($currentUser['full_name'])) {
+    $nameParts = preg_split('/\s+/', trim($currentUser['full_name']));
+    if (count($nameParts) >= 2) {
+        $userInitials = strtoupper(substr($nameParts[0], 0, 1) . substr(end($nameParts), 0, 1));
+    } else {
+        $userInitials = strtoupper(substr($currentUser['full_name'], 0, 2));
+    }
+}
+
 // Detect current page for active nav state (Jakob's Law)
 $currentPage = basename($_SERVER['SCRIPT_NAME']);
 function isNavActive($page, $currentPage) {
@@ -130,6 +141,8 @@ function ariaCurrent($page, $currentPage) {
     <style>
         .notification-dropdown { display: none !important; }
         .notification-dropdown.open { display: block !important; }
+        .user-profile-dropdown { display: none !important; }
+        .user-profile-dropdown.open { display: block !important; }
         #app_sidebar {
             background: linear-gradient(180deg, #07172b 0%, #0c2340 50%, #07172b 100%) !important;
             color: #94a3b8 !important;
@@ -336,9 +349,125 @@ function ariaCurrent($page, $currentPage) {
                             </div>
                         <?php endif; ?>
 
-                        <div class="hidden sm:flex flex-col text-right">
-                            <span class="text-xs font-black text-white"><?= htmlspecialchars($currentUser['full_name']) ?></span>
-                            <span class="text-[11px] text-cornflower_ocean-900 font-semibold capitalize"><?= $currentUser['role'] === 'admin' ? 'Office Manager' : 'Susu Collector' ?></span>
+                        <!-- User Profile Pill & Interactive Dropdown -->
+                        <div class="relative" id="user_profile_dropdown_wrapper">
+                            <button type="button" id="user_profile_btn" onclick="toggleUserDropdown(event)" 
+                                    class="group flex items-center gap-2 p-1 sm:px-2.5 sm:py-1.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/15 transition shadow-2xs focus:outline-none cursor-pointer"
+                                    aria-label="User profile menu" title="User profile menu">
+                                
+                                <!-- Initials Avatar Circle -->
+                                <div class="w-8 h-8 sm:w-8.5 sm:h-8.5 rounded-xl <?= $currentUser['role'] === 'admin' ? 'bg-gradient-to-tr from-amber-400 via-pumpkin_spice to-pumpkin_spice-400' : 'bg-gradient-to-tr from-emerald-500 to-teal-400' ?> text-white font-black text-xs sm:text-sm flex items-center justify-center shadow-xs flex-shrink-0 border border-white/25 tracking-wider font-heading">
+                                    <?= htmlspecialchars($userInitials) ?>
+                                </div>
+
+                                <!-- Name & Role Badge (Desktop) -->
+                                <div class="hidden sm:flex flex-col text-left leading-tight">
+                                    <span class="text-xs font-black text-white group-hover:text-white truncate max-w-[125px]">
+                                        <?= htmlspecialchars($currentUser['full_name']) ?>
+                                    </span>
+                                    <div class="flex items-center gap-1.5 mt-0.5">
+                                        <span class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-md text-[9px] font-black uppercase tracking-wider <?= $currentUser['role'] === 'admin' ? 'bg-amber-400/20 text-amber-200 border border-amber-300/30' : 'bg-emerald-400/20 text-emerald-200 border border-emerald-300/30' ?>">
+                                            <i class="fa-solid <?= $currentUser['role'] === 'admin' ? 'fa-shield-halved' : 'fa-person-walking-luggage' ?> text-[8px]"></i>
+                                            <span><?= $currentUser['role'] === 'admin' ? 'Admin' : 'Collector' ?></span>
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <!-- Chevron Dropdown Indicator -->
+                                <i class="fa-solid fa-chevron-down text-[10px] text-white/60 group-hover:text-white transition-transform duration-200 ml-0.5" id="user_profile_chevron"></i>
+                            </button>
+
+                            <!-- User Profile Dropdown Card -->
+                            <div id="user_profile_dropdown" class="user-profile-dropdown absolute right-0 top-full mt-2 w-72 bg-white text-slate-800 rounded-2xl shadow-2xl border border-silver-600/80 z-50 overflow-hidden hidden">
+                                
+                                <!-- Dropdown Header Card -->
+                                <div class="p-4 bg-gradient-to-br from-slate-50 to-platinum border-b border-silver-600/80">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-11 h-11 rounded-xl <?= $currentUser['role'] === 'admin' ? 'bg-gradient-to-tr from-amber-400 via-pumpkin_spice to-pumpkin_spice-400' : 'bg-gradient-to-tr from-emerald-500 to-teal-400' ?> text-white font-black text-sm flex items-center justify-center shadow-md flex-shrink-0 border border-white/40 font-heading">
+                                            <?= htmlspecialchars($userInitials) ?>
+                                        </div>
+                                        <div class="flex-1 min-w-0">
+                                            <div class="font-black text-sm text-slate-800 truncate"><?= htmlspecialchars($currentUser['full_name']) ?></div>
+                                            <div class="text-[11px] text-slate-400 font-mono">@<?= htmlspecialchars($currentUser['username']) ?></div>
+                                            <div class="text-[10px] font-semibold text-slate-500 mt-0.5 flex items-center gap-1">
+                                                <i class="fa-solid fa-phone text-[9px] text-slate-400"></i>
+                                                <span><?= htmlspecialchars($currentUser['phone'] ?: 'No phone number') ?></span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="mt-3 pt-2.5 border-t border-silver-600/50 flex items-center justify-between text-[11px]">
+                                        <span class="text-slate-500 font-medium">Account Access:</span>
+                                        <span class="px-2 py-0.5 rounded-md font-extrabold text-[10px] uppercase <?= $currentUser['role'] === 'admin' ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-emerald-100 text-emerald-800 border border-emerald-200' ?>">
+                                            <?= $currentUser['role'] === 'admin' ? 'Office Manager' : 'Field Savings Agent' ?>
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <!-- Quick Navigation Shortcuts -->
+                                <div class="p-2 text-xs font-semibold text-slate-700 divide-y divide-silver-600/40">
+                                    <div class="py-1 space-y-0.5">
+                                        <?php if ($currentUser['role'] === 'admin'): ?>
+                                            <a href="admin_dashboard.php" class="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-platinum-800 hover:text-steel_azure transition">
+                                                <i class="fa-solid fa-gauge-high w-4 text-center text-slate-400 text-xs"></i>
+                                                <span>Dashboard Overview</span>
+                                            </a>
+                                            <a href="customers.php" class="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-platinum-800 hover:text-steel_azure transition">
+                                                <i class="fa-solid fa-users w-4 text-center text-slate-400 text-xs"></i>
+                                                <span>Customers Directory</span>
+                                            </a>
+                                            <a href="collectors.php" class="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-platinum-800 hover:text-steel_azure transition">
+                                                <i class="fa-solid fa-users-gear w-4 text-center text-slate-400 text-xs"></i>
+                                                <span>Field Collectors Hub</span>
+                                            </a>
+                                            <a href="daily_handover.php" class="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-platinum-800 hover:text-steel_azure transition">
+                                                <i class="fa-solid fa-handshake w-4 text-center text-slate-400 text-xs"></i>
+                                                <span>Daily Cash Handovers</span>
+                                            </a>
+                                            <a href="reports.php" class="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-platinum-800 hover:text-steel_azure transition">
+                                                <i class="fa-solid fa-file-invoice-dollar w-4 text-center text-slate-400 text-xs"></i>
+                                                <span>Financial Reports</span>
+                                            </a>
+                                        <?php else: ?>
+                                            <a href="collector_dashboard.php" class="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-platinum-800 hover:text-steel_azure transition">
+                                                <i class="fa-solid fa-gauge-high w-4 text-center text-slate-400 text-xs"></i>
+                                                <span>My Field Route</span>
+                                            </a>
+                                            <a href="record_deposit.php" class="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-pumpkin_spice-900 text-pumpkin_spice transition font-bold">
+                                                <i class="fa-solid fa-circle-plus w-4 text-center text-pumpkin_spice text-xs"></i>
+                                                <span>Record Daily Deposit</span>
+                                            </a>
+                                            <a href="customers.php" class="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-platinum-800 hover:text-steel_azure transition">
+                                                <i class="fa-solid fa-users w-4 text-center text-slate-400 text-xs"></i>
+                                                <span>Assigned Clients</span>
+                                            </a>
+                                            <a href="daily_handover.php" class="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-platinum-800 hover:text-steel_azure transition">
+                                                <i class="fa-solid fa-handshake w-4 text-center text-slate-400 text-xs"></i>
+                                                <span>End-of-Day Handover</span>
+                                            </a>
+                                        <?php endif; ?>
+                                    </div>
+
+                                    <!-- Support Contact -->
+                                    <div class="py-1">
+                                        <a href="https://wa.me/233557869989" target="_blank" class="flex items-center justify-between px-3 py-2 rounded-xl hover:bg-emerald-50 hover:text-emerald-700 transition text-slate-600">
+                                            <span class="flex items-center gap-2.5">
+                                                <i class="fa-brands fa-whatsapp w-4 text-center text-emerald-500 text-sm"></i>
+                                                <span>IT Support (Mart IT)</span>
+                                            </span>
+                                            <i class="fa-solid fa-arrow-up-right-from-square text-[10px] text-slate-400"></i>
+                                        </a>
+                                    </div>
+
+                                    <!-- Sign Out Link -->
+                                    <div class="pt-1">
+                                        <a href="logout.php" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-red-600 hover:bg-red-50 hover:text-red-700 transition font-bold">
+                                            <i class="fa-solid fa-right-from-bracket w-4 text-center text-red-500 text-xs"></i>
+                                            <span>Sign Out of Account</span>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Notification Bell & Interactive Drawer -->
@@ -434,6 +563,13 @@ function ariaCurrent($page, $currentPage) {
         }
         const dropdown = document.getElementById('notification_dropdown');
         const backdrop = document.getElementById('notification_backdrop');
+        const userDropdown = document.getElementById('user_profile_dropdown');
+        const userChevron = document.getElementById('user_profile_chevron');
+        
+        // Close user profile dropdown if open
+        if (userDropdown) userDropdown.classList.remove('open');
+        if (userChevron) userChevron.style.transform = 'rotate(0deg)';
+
         if (!dropdown) return;
         const isOpen = dropdown.classList.contains('open');
         if (isOpen) {
@@ -445,6 +581,31 @@ function ariaCurrent($page, $currentPage) {
         }
     }
 
+    function toggleUserDropdown(e) {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        const dropdown = document.getElementById('user_profile_dropdown');
+        const chevron = document.getElementById('user_profile_chevron');
+        const notifDropdown = document.getElementById('notification_dropdown');
+        const notifBackdrop = document.getElementById('notification_backdrop');
+
+        // Close notification dropdown if open
+        if (notifDropdown) notifDropdown.classList.remove('open');
+        if (notifBackdrop) notifBackdrop.classList.remove('open');
+
+        if (!dropdown) return;
+        const isOpen = dropdown.classList.contains('open');
+        if (isOpen) {
+            dropdown.classList.remove('open');
+            if (chevron) chevron.style.transform = 'rotate(0deg)';
+        } else {
+            dropdown.classList.add('open');
+            if (chevron) chevron.style.transform = 'rotate(180deg)';
+        }
+    }
+
     function toggleSidebar() {
         document.documentElement.classList.toggle('sidebar-collapsed');
         document.body.classList.toggle('sidebar-collapsed');
@@ -453,6 +614,41 @@ function ariaCurrent($page, $currentPage) {
             localStorage.setItem('eyram_sidebar_collapsed', isCollapsed ? 'true' : 'false');
         } catch(e) {}
     }
+
+    // Global click-outside listener to close dropdowns
+    document.addEventListener('click', function(e) {
+        const userWrapper = document.getElementById('user_profile_dropdown_wrapper');
+        const userDropdown = document.getElementById('user_profile_dropdown');
+        const chevron = document.getElementById('user_profile_chevron');
+        if (userWrapper && userDropdown && !userWrapper.contains(e.target)) {
+            userDropdown.classList.remove('open');
+            if (chevron) chevron.style.transform = 'rotate(0deg)';
+        }
+
+        const notifWrapper = document.getElementById('notification_dropdown_wrapper');
+        const notifDropdown = document.getElementById('notification_dropdown');
+        const notifBackdrop = document.getElementById('notification_backdrop');
+        if (notifWrapper && notifDropdown && !notifWrapper.contains(e.target)) {
+            notifDropdown.classList.remove('open');
+            if (notifBackdrop) notifBackdrop.classList.remove('open');
+        }
+    });
+
+    // ESC key listener to close dropdowns
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            const userDropdown = document.getElementById('user_profile_dropdown');
+            const chevron = document.getElementById('user_profile_chevron');
+            if (userDropdown) {
+                userDropdown.classList.remove('open');
+                if (chevron) chevron.style.transform = 'rotate(0deg)';
+            }
+            const notifDropdown = document.getElementById('notification_dropdown');
+            const notifBackdrop = document.getElementById('notification_backdrop');
+            if (notifDropdown) notifDropdown.classList.remove('open');
+            if (notifBackdrop) notifBackdrop.classList.remove('open');
+        }
+    });
     </script>
 
     <!-- Main Content Area (Page Entrance Animation) -->

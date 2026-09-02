@@ -215,7 +215,7 @@ require_once __DIR__ . '/includes/header.php';
                                 <td class="py-3 px-4 text-right">
                                     <a href="daily_handover.php?collector_id=<?= $col['id'] ?>" class="btn-touch px-2.5 py-1 text-xs font-bold text-steel_azure hover:text-white hover:bg-steel_azure bg-blue-50 rounded-lg transition border border-blue-200 inline-flex items-center gap-1">
                                         <i class="fa-solid fa-scale-balanced text-[10px]"></i>
-                                        <span>Reconcile Cash</span>
+                                        <span>Receive Cash</span>
                                     </a>
                                 </td>
                             </tr>
