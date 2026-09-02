@@ -66,16 +66,19 @@ require_once __DIR__ . '/includes/header.php';
 
     <!-- Top Navigation & Print Actions -->
     <div class="flex items-center justify-between no-print">
-        <a href="customers.php" class="text-xs font-bold text-cornflower_ocean hover:text-steel_azure flex items-center gap-1">
-            &larr; Customers Directory
+        <a href="customers.php" class="text-xs font-bold text-cornflower_ocean hover:text-steel_azure inline-flex items-center gap-1.5">
+            <i class="fa-solid fa-arrow-left text-xs"></i>
+            <span>Customers Directory</span>
         </a>
         <div class="flex items-center gap-2">
-            <button onclick="window.print()" class="btn-touch bg-white text-slate-700 hover:bg-platinum border border-silver-600 text-xs font-bold px-3 py-1.5 shadow-sm">
-                🖨️ Print Passbook
+            <button onclick="window.print()" class="btn-touch bg-white text-slate-700 hover:bg-platinum border border-silver-600 text-xs font-bold px-3 py-1.5 shadow-2xs rounded-xl inline-flex items-center gap-1.5">
+                <i class="fa-solid fa-print text-xs"></i>
+                <span>Print Passbook</span>
             </button>
             <?php if ($card['status'] === 'active'): ?>
-                <a href="record_deposit.php?customer_id=<?= $card['customer_id'] ?>" class="btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold px-3.5 py-1.5 shadow-sm">
-                    + Record Deposit
+                <a href="record_deposit.php?customer_id=<?= $card['customer_id'] ?>" class="btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold px-3.5 py-1.5 shadow-2xs rounded-xl inline-flex items-center gap-1.5">
+                    <i class="fa-solid fa-plus text-xs"></i>
+                    <span>Record Deposit</span>
                 </a>
             <?php endif; ?>
         </div>
@@ -340,7 +343,9 @@ require_once __DIR__ . '/includes/header.php';
                         <tr>
                             <td colspan="5" class="text-center">
                                 <div class="empty-state">
-                                    <div class="empty-state-icon bg-slate-100">📋</div>
+                                    <div class="empty-state-icon bg-slate-100 text-slate-400">
+                                        <i class="fa-solid fa-receipt text-3xl"></i>
+                                    </div>
                                     <div class="empty-state-title">No Deposits Yet</div>
                                     <div class="empty-state-text">No deposits stamped on this card yet.</div>
                                 </div>

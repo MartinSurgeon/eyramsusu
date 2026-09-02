@@ -114,16 +114,15 @@ require_once __DIR__ . '/includes/header.php';
             <h1 class="text-xl sm:text-2xl font-black text-steel_azure">Request Customer Payout</h1>
             <p class="text-xs text-slate-500 mt-0.5">Calculates customer savings minus the 1-space business fee.</p>
         </div>
-        <a href="<?= $user['role'] === 'admin' ? 'payouts.php' : 'collector_dashboard.php' ?>" class="text-xs font-bold text-cornflower_ocean hover:text-steel_azure">
-            &larr; Back
+        <a href="<?= $user['role'] === 'admin' ? 'payouts.php' : 'collector_dashboard.php' ?>" class="text-xs font-bold text-cornflower_ocean hover:text-steel_azure inline-flex items-center gap-1.5">
+            <i class="fa-solid fa-arrow-left text-xs"></i>
+            <span>Back</span>
         </a>
     </div>
 
     <?php if (!empty($error)): ?>
         <div class="p-3.5 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-semibold flex items-center gap-2">
-            <svg class="w-5 h-5 flex-shrink-0 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
-            </svg>
+            <i class="fa-solid fa-circle-exclamation text-red-500 text-sm"></i>
             <span><?= htmlspecialchars($error) ?></span>
         </div>
     <?php endif; ?>
@@ -197,16 +196,16 @@ require_once __DIR__ . '/includes/header.php';
                 </div>
 
                 <!-- Expandable: How is this calculated? (Tesler's Law) -->
-                <button type="button" class="expandable-trigger" data-target="calc-explainer">
-                    <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
-                    How is this calculated?
+                <button type="button" class="expandable-trigger flex items-center gap-1.5" data-target="calc-explainer">
+                    <i class="fa-solid fa-circle-question text-xs text-steel_azure"></i>
+                    <span>How is this calculated?</span>
                 </button>
                 <div id="calc-explainer" class="expandable-content">
                     <div class="text-[11px] text-slate-500 bg-white/70 p-3 rounded-lg border border-silver-600/70 space-y-1.5">
-                        <p>📋 <strong>Susu Business Rule:</strong> When a customer completes their 31-space card (or stops early), the business keeps exactly <strong>one space</strong> as its fee.</p>
-                        <p>💰 The fee equals the agreed daily rate: <strong><?= format_money($breakdown['daily_amount']) ?></strong>.</p>
-                        <p>🔄 Any leftover change (float) that was building towards the next space is also returned to the customer.</p>
-                        <p>📌 The card will be permanently closed upon Admin approval, and the customer may start a fresh card whenever they wish.</p>
+                        <p><strong>Susu Business Rule:</strong> When a customer completes their 31-space card (or stops early), the business keeps exactly <strong>one space</strong> as its fee.</p>
+                        <p>The fee equals the agreed daily rate: <strong><?= format_money($breakdown['daily_amount']) ?></strong>.</p>
+                        <p>Any leftover change (float) that was building towards the next space is also returned to the customer.</p>
+                        <p>The card will be permanently closed upon Admin approval, and the customer may start a fresh card whenever they wish.</p>
                     </div>
                 </div>
             </div>
@@ -221,8 +220,9 @@ require_once __DIR__ . '/includes/header.php';
             <!-- Submit CTA -->
             <div class="pt-2">
                 <button type="submit" 
-                        class="w-full btn-touch bg-steel_azure hover:bg-steel_azure-400 text-white font-extrabold text-sm sm:text-base tracking-wide shadow-md hover:shadow-lg transition">
-                    Submit Payout Request for Approval
+                        class="w-full btn-touch bg-steel_azure hover:bg-steel_azure-400 text-white font-extrabold text-sm sm:text-base tracking-wide shadow-md hover:shadow-lg transition flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-paper-plane text-sm"></i>
+                    <span>Submit Payout Request for Approval</span>
                 </button>
             </div>
         <?php endif; ?>

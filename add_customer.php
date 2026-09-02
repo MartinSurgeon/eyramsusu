@@ -129,7 +129,8 @@ require_once __DIR__ . '/includes/header.php';
         <div id="step_section_1" class="step-section space-y-5">
             <div class="p-4 bg-blue-50/70 border border-blue-100 rounded-xl">
                 <div class="flex items-center gap-2 text-steel_azure font-extrabold text-sm mb-1">
-                    <span>👤</span> Step 1: Client Personal Details
+                    <i class="fa-solid fa-user text-xs"></i>
+                    <span>Step 1: Client Personal Details</span>
                 </div>
                 <p class="text-xs text-slate-600">Enter the customer's full name, mobile phone, and business or market stall location.</p>
             </div>
@@ -163,12 +164,12 @@ require_once __DIR__ . '/includes/header.php';
             </div>
 
             <div class="pt-5 border-t border-silver-600/60 flex items-center justify-between">
-                <a href="customers.php" class="btn-touch bg-white text-slate-600 hover:bg-platinum-800 border border-silver-600 text-xs font-bold px-4 py-2.5">
+                <a href="customers.php" class="btn-touch bg-white text-slate-600 hover:bg-platinum-800 border border-silver-600 text-xs font-bold px-4 py-2.5 rounded-xl">
                     Cancel
                 </a>
-                <button type="button" onclick="validateAndGoToStep(2)" class="btn-touch bg-steel_azure hover:bg-steel_azure-400 text-white text-xs sm:text-sm font-bold px-5 py-2.5 shadow-sm transition flex items-center gap-1.5">
+                <button type="button" onclick="validateAndGoToStep(2)" class="btn-touch bg-steel_azure hover:bg-steel_azure-400 text-white text-xs sm:text-sm font-bold px-5 py-2.5 shadow-2xs rounded-xl transition flex items-center gap-1.5">
                     <span>Continue to Step 2: Collector</span>
-                    <span>&rarr;</span>
+                    <i class="fa-solid fa-arrow-right text-xs"></i>
                 </button>
             </div>
         </div>
@@ -179,7 +180,8 @@ require_once __DIR__ . '/includes/header.php';
         <div id="step_section_2" class="step-section hidden space-y-5">
             <div class="p-4 bg-purple-50/70 border border-purple-100 rounded-xl">
                 <div class="flex items-center gap-2 text-purple-900 font-extrabold text-sm mb-1">
-                    <span>🏃</span> Step 2: Route & Field Collector Assignment
+                    <i class="fa-solid fa-person-walking-luggage text-xs"></i>
+                    <span>Step 2: Route & Field Collector Assignment</span>
                 </div>
                 <p class="text-xs text-slate-600">Assign this customer to an active field agent who will visit their shop and collect daily Susu payments.</p>
             </div>
@@ -199,13 +201,13 @@ require_once __DIR__ . '/includes/header.php';
             </div>
 
             <div class="pt-5 border-t border-silver-600/60 flex items-center justify-between">
-                <button type="button" onclick="goToStep(1)" class="btn-touch bg-white text-slate-600 hover:bg-platinum-800 border border-silver-600 text-xs font-bold px-4 py-2.5 flex items-center gap-1.5">
-                    <span>&larr;</span>
+                <button type="button" onclick="goToStep(1)" class="btn-touch bg-white text-slate-600 hover:bg-platinum-800 border border-silver-600 text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-1.5">
+                    <i class="fa-solid fa-arrow-left text-xs"></i>
                     <span>Back to Client Info</span>
                 </button>
-                <button type="button" onclick="goToStep(3)" class="btn-touch bg-steel_azure hover:bg-steel_azure-400 text-white text-xs sm:text-sm font-bold px-5 py-2.5 shadow-sm transition flex items-center gap-1.5">
+                <button type="button" onclick="goToStep(3)" class="btn-touch bg-steel_azure hover:bg-steel_azure-400 text-white text-xs sm:text-sm font-bold px-5 py-2.5 shadow-2xs rounded-xl transition flex items-center gap-1.5">
                     <span>Continue to Step 3: Susu Card</span>
-                    <span>&rarr;</span>
+                    <i class="fa-solid fa-arrow-right text-xs"></i>
                 </button>
             </div>
         </div>
@@ -216,7 +218,8 @@ require_once __DIR__ . '/includes/header.php';
         <div id="step_section_3" class="step-section hidden space-y-5">
             <div class="p-4 bg-emerald-50/70 border border-emerald-100 rounded-xl">
                 <div class="flex items-center gap-2 text-emerald-900 font-extrabold text-sm mb-1">
-                    <span>📋</span> Step 3: Susu Savings Card & Plan Setup
+                    <i class="fa-solid fa-id-card text-xs"></i>
+                    <span>Step 3: Susu Savings Card & Plan Setup</span>
                 </div>
                 <p class="text-xs text-slate-600">Set the daily contribution amount per space. Each card contains 31 spaces.</p>
             </div>
@@ -265,12 +268,12 @@ require_once __DIR__ . '/includes/header.php';
             </div>
 
             <div class="pt-5 border-t border-silver-600/60 flex items-center justify-between">
-                <button type="button" onclick="goToStep(2)" class="btn-touch bg-white text-slate-600 hover:bg-platinum-800 border border-silver-600 text-xs font-bold px-4 py-2.5 flex items-center gap-1.5">
-                    <span>&larr;</span>
+                <button type="button" onclick="goToStep(2)" class="btn-touch bg-white text-slate-600 hover:bg-platinum-800 border border-silver-600 text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-1.5">
+                    <i class="fa-solid fa-arrow-left text-xs"></i>
                     <span>Back to Collector</span>
                 </button>
-                <button type="submit" class="btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs sm:text-sm font-extrabold px-6 py-2.5 shadow-md hover:shadow-lg transition flex items-center gap-2">
-                    <span>✓</span>
+                <button type="submit" class="btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs sm:text-sm font-extrabold px-6 py-2.5 shadow-2xs rounded-xl transition flex items-center gap-2">
+                    <i class="fa-solid fa-circle-check text-xs"></i>
                     <span>Save & Open Susu Card</span>
                 </button>
             </div>

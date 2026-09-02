@@ -21,16 +21,19 @@ $stmtCollectors = $pdo->query("
 ");
 $collectors = $stmtCollectors->fetchAll();
 
-// Fetch recent 7 deposits (Miller's law chunking)
+// Fetch recent deposits with pagination
 $stmtRecent = $pdo->query("
     SELECT d.*, c.full_name as customer_name, c.account_number, u.full_name as collector_name, sc.card_number
     FROM deposits d
     JOIN customers c ON d.customer_id = c.id
     JOIN users u ON d.collector_id = u.id
     JOIN susu_cards sc ON d.card_id = sc.id
-    ORDER BY d.id DESC LIMIT 7
+    ORDER BY d.id DESC
 ");
-$recentDeposits = $stmtRecent->fetchAll();
+$allRecentDeposits = $stmtRecent->fetchAll();
+$recentPage = max(1, (int)($_GET['recent_page'] ?? 1));
+$pagedRecent = paginate_array($allRecentDeposits, 5, $recentPage);
+$recentDeposits = $pagedRecent['items'];
 
 require_once __DIR__ . '/includes/header.php';
 ?>
@@ -154,8 +157,8 @@ require_once __DIR__ . '/includes/header.php';
                     <i class="fa-solid fa-user-group"></i>
                 </div>
                 <div>
-                    <h2 class="text-base font-bold text-slate-800">Collectors Live Cash Status</h2>
-                    <p class="text-xs text-slate-500">Cash in Hand reflects collections awaiting end-of-day handover.</p>
+                    <h2 class="text-base font-bold text-slate-800">Live Field Cash</h2>
+                    <p class="text-xs text-slate-500">Money with collectors awaiting office handover.</p>
                 </div>
             </div>
             <div class="flex items-center gap-2">
@@ -299,6 +302,8 @@ require_once __DIR__ . '/includes/header.php';
                 </tbody>
             </table>
         </div>
+
+        <?= render_pagination($pagedRecent['total'], 5, $pagedRecent['current'], 'recent_page') ?>
     </div>
 
 </div>

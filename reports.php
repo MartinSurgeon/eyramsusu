@@ -36,13 +36,19 @@ $query .= " ORDER BY d.id DESC";
 
 $stmtDep = $pdo->prepare($query);
 $stmtDep->execute($params);
-$deposits = $stmtDep->fetchAll();
+$allDeposits = $stmtDep->fetchAll();
 
 // Summary calculations for the date
 $totalCollected = 0.00;
-foreach ($deposits as $d) {
+foreach ($allDeposits as $d) {
     $totalCollected += (float)$d['amount'];
 }
+
+// Pagination setup
+$page = max(1, (int)($_GET['page'] ?? 1));
+$perPage = 15;
+$pagedDeposits = paginate_array($allDeposits, $perPage, $page);
+$deposits = $pagedDeposits['items'];
 
 // Fetch payouts disbursed on this date
 $stmtPay = $pdo->prepare("
@@ -88,12 +94,14 @@ require_once __DIR__ . '/includes/header.php';
                 </div>
             <?php endif; ?>
 
-            <button type="submit" class="btn-touch bg-steel_azure hover:bg-steel_azure-400 text-white text-xs font-bold px-4 py-2 shadow-sm">
-                Filter
+            <button type="submit" class="btn-touch bg-steel_azure hover:bg-steel_azure-400 text-white text-xs font-bold px-4 py-2 shadow-sm rounded-xl flex items-center gap-1.5">
+                <i class="fa-solid fa-filter text-xs"></i>
+                <span>Filter</span>
             </button>
 
-            <button type="button" onclick="window.print()" class="btn-touch bg-white hover:bg-platinum text-slate-700 border border-silver-600 text-xs font-bold px-3 py-2 shadow-sm">
-                🖨️ Print Sheet
+            <button type="button" onclick="window.print()" class="btn-touch bg-white hover:bg-platinum text-slate-700 border border-silver-600 text-xs font-bold px-3 py-2 shadow-sm rounded-xl flex items-center gap-1.5">
+                <i class="fa-solid fa-print text-xs"></i>
+                <span>Print Sheet</span>
             </button>
         </form>
     </div>
@@ -108,17 +116,17 @@ require_once __DIR__ . '/includes/header.php';
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         
         <div class="kpi-card">
-            <div class="kpi-icon bg-emerald-50 text-emerald-600">💰</div>
-            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Cash Collected</span>
+            <div class="kpi-icon bg-emerald-50 text-emerald-600"><i class="fa-solid fa-sack-dollar"></i></div>
+            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mt-2">Total Cash Collected</span>
             <div class="text-xl sm:text-2xl font-black text-emerald-600 mt-1">
                 <?= format_money($totalCollected) ?>
             </div>
-            <span class="text-[11px] text-slate-500 mt-1"><?= count($deposits) ?> individual spaces stamped</span>
+            <span class="text-[11px] text-slate-500 mt-1"><?= count($allDeposits) ?> individual spaces stamped</span>
         </div>
 
         <div class="kpi-card">
-            <div class="kpi-icon bg-orange-50 text-pumpkin_spice">🏷️</div>
-            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Business Fees Earned</span>
+            <div class="kpi-icon bg-orange-50 text-pumpkin_spice"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mt-2">Business Fees Earned</span>
             <div class="text-xl sm:text-2xl font-black text-pumpkin_spice mt-1">
                 <?= format_money($payoutStats['total_fees']) ?>
             </div>
@@ -126,8 +134,8 @@ require_once __DIR__ . '/includes/header.php';
         </div>
 
         <div class="kpi-card">
-            <div class="kpi-icon bg-blue-50 text-steel_azure">📤</div>
-            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Payouts Disbursed</span>
+            <div class="kpi-icon bg-blue-50 text-steel_azure"><i class="fa-solid fa-hand-holding-dollar"></i></div>
+            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mt-2">Payouts Disbursed</span>
             <div class="text-xl sm:text-2xl font-black text-steel_azure mt-1">
                 <?= format_money($payoutStats['total_payouts']) ?>
             </div>
@@ -135,8 +143,8 @@ require_once __DIR__ . '/includes/header.php';
         </div>
 
         <div class="kpi-card">
-            <div class="kpi-icon bg-slate-100 text-slate-700">⚖️</div>
-            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Net Cash Position</span>
+            <div class="kpi-icon bg-slate-100 text-slate-700"><i class="fa-solid fa-scale-balanced"></i></div>
+            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mt-2">Net Cash Position</span>
             <?php $netCash = $totalCollected - (float)$payoutStats['total_payouts']; ?>
             <div class="text-xl sm:text-2xl font-black <?= $netCash >= 0 ? 'text-emerald-700' : 'text-red-600' ?> mt-1">
                 <?= format_money($netCash) ?>
@@ -150,13 +158,15 @@ require_once __DIR__ . '/includes/header.php';
     <div class="bg-white rounded-2xl border border-silver-600 shadow-sm overflow-hidden">
         <div class="p-4 sm:p-5 border-b border-silver-600/70 flex items-center justify-between">
             <div class="flex items-center gap-3">
-                <div class="section-heading-icon bg-emerald-50 text-emerald-600">📑</div>
+                <div class="section-heading-icon bg-emerald-50 text-emerald-600">
+                    <i class="fa-solid fa-list-check"></i>
+                </div>
                 <div>
                     <h2 class="text-base font-bold text-slate-800">Space Deposits Log</h2>
                     <p class="text-xs text-slate-500">Every space stamped and attributed to a collector.</p>
                 </div>
             </div>
-            <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-platinum text-slate-600"><?= count($deposits) ?> entries</span>
+            <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-platinum text-slate-600"><?= $pagedDeposits['total'] ?> entries</span>
         </div>
 
         <div class="overflow-x-auto">
@@ -177,7 +187,9 @@ require_once __DIR__ . '/includes/header.php';
                         <tr>
                             <td colspan="7" class="text-center">
                                 <div class="empty-state">
-                                    <div class="empty-state-icon bg-slate-100">💰</div>
+                                    <div class="empty-state-icon bg-slate-100 text-slate-400">
+                                        <i class="fa-solid fa-coins text-3xl"></i>
+                                    </div>
                                     <div class="empty-state-title">No Collections Recorded</div>
                                     <div class="empty-state-text">No space deposits were logged for this selected date.</div>
                                 </div>
@@ -192,7 +204,7 @@ require_once __DIR__ . '/includes/header.php';
                                 <td class="py-3 px-4 font-bold text-slate-800">
                                     <?= htmlspecialchars($d['customer_name']) ?>
                                 </td>
-                                <td class="py-3 px-4 text-slate-500">
+                                <td class="py-3 px-4 text-slate-500 font-mono">
                                     <?= htmlspecialchars($d['account_number']) ?>
                                 </td>
                                 <td class="py-3 px-4 whitespace-nowrap">
@@ -219,6 +231,8 @@ require_once __DIR__ . '/includes/header.php';
                 </tbody>
             </table>
         </div>
+
+        <?= render_pagination($pagedDeposits['total'], $pagedDeposits['per_page'], $pagedDeposits['current']) ?>
     </div>
 
 </div>

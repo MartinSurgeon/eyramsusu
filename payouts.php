@@ -105,7 +105,7 @@ $stmtPending = $pdo->query("
 ");
 $pendingPayouts = $stmtPending->fetchAll();
 
-// Fetch Recent Settled Payouts (Miller's law chunking)
+// Fetch Recent Settled Payouts with pagination
 $stmtHistory = $pdo->query("
     SELECT p.*, c.full_name as customer_name, c.account_number,
            u.full_name as requested_by_name, admin.full_name as approved_by_name,
@@ -116,9 +116,12 @@ $stmtHistory = $pdo->query("
     LEFT JOIN users admin ON p.approved_by = admin.id
     JOIN susu_cards sc ON p.card_id = sc.id
     WHERE p.status IN ('paid', 'approved', 'rejected')
-    ORDER BY p.id DESC LIMIT 15
+    ORDER BY p.id DESC
 ");
-$historyPayouts = $stmtHistory->fetchAll();
+$allHistoryPayouts = $stmtHistory->fetchAll();
+$historyPage = max(1, (int)($_GET['page'] ?? 1));
+$pagedHistory = paginate_array($allHistoryPayouts, 10, $historyPage);
+$historyPayouts = $pagedHistory['items'];
 
 $pageTitle = "Customer Payouts";
 require_once __DIR__ . '/includes/header.php';
@@ -133,8 +136,9 @@ require_once __DIR__ . '/includes/header.php';
             <p class="text-xs sm:text-sm text-slate-500 mt-0.5">Manage cycle payouts, fee deductions, and cash disbursements.</p>
         </div>
         <div>
-            <a href="request_payout.php" class="btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs sm:text-sm font-extrabold shadow-sm transition">
-                + Request New Payout
+            <a href="request_payout.php" class="btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs sm:text-sm font-extrabold shadow-sm transition inline-flex items-center gap-1.5">
+                <i class="fa-solid fa-hand-holding-dollar text-xs"></i>
+                <span>Request New Payout</span>
             </a>
         </div>
     </div>
@@ -156,7 +160,9 @@ require_once __DIR__ . '/includes/header.php';
         <div class="divide-y divide-silver-600/60">
             <?php if (empty($pendingPayouts)): ?>
                 <div class="empty-state">
-                    <div class="empty-state-icon bg-emerald-50">✅</div>
+                    <div class="empty-state-icon bg-emerald-50 text-emerald-600">
+                        <i class="fa-solid fa-circle-check text-3xl"></i>
+                    </div>
                     <div class="empty-state-title">No Pending Requests</div>
                     <div class="empty-state-text">There are no pending payout requests requiring verification right now.</div>
                 </div>
@@ -204,20 +210,23 @@ require_once __DIR__ . '/includes/header.php';
                                 <form method="POST" action="payouts.php" onsubmit="return confirm('Confirm disbursement of <?= format_money($p['customer_payout']) ?> to <?= addslashes($p['customer_name']) ?>? This will close Card #<?= $p['card_number'] ?>.');">
                                     <input type="hidden" name="payout_id" value="<?= $p['id'] ?>">
                                     <input type="hidden" name="action" value="approve_and_pay">
-                                    <button type="submit" class="btn-touch bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black px-4 py-2 shadow-sm transition">
-                                        ✓ Approve & Disburse Cash
+                                    <button type="submit" class="btn-touch bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black px-4 py-2 shadow-2xs rounded-xl transition inline-flex items-center gap-1.5">
+                                        <i class="fa-solid fa-circle-check text-xs"></i>
+                                        <span>Approve & Disburse Cash</span>
                                     </button>
                                 </form>
                                 <form method="POST" action="payouts.php" onsubmit="return confirm('Reject this payout request?');">
                                     <input type="hidden" name="payout_id" value="<?= $p['id'] ?>">
                                     <input type="hidden" name="action" value="reject">
-                                    <button type="submit" class="btn-touch bg-white text-red-600 border border-red-300 hover:bg-red-50 text-xs font-bold px-3 py-2 transition">
-                                        Reject
+                                    <button type="submit" class="btn-touch bg-white text-red-600 border border-red-300 hover:bg-red-50 text-xs font-bold px-3 py-2 rounded-xl transition inline-flex items-center gap-1.5">
+                                        <i class="fa-solid fa-ban text-xs"></i>
+                                        <span>Reject</span>
                                     </button>
                                 </form>
                             <?php else: ?>
-                                <span class="text-xs font-bold text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg">
-                                    Pending Admin Verification
+                                <span class="text-xs font-bold text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                                    <i class="fa-solid fa-clock text-amber-500"></i>
+                                    <span>Pending Admin Verification</span>
                                 </span>
                             <?php endif; ?>
                         </div>
@@ -229,9 +238,14 @@ require_once __DIR__ . '/includes/header.php';
 
     <!-- Payout History Table -->
     <div class="bg-white rounded-2xl border border-silver-600 shadow-sm overflow-hidden">
-        <div class="p-4 sm:p-5 border-b border-silver-600/70">
-            <h2 class="text-base font-bold text-slate-800">Completed Payout History</h2>
-            <p class="text-xs text-slate-500">Historical records of closed cards and disbursements.</p>
+        <div class="p-4 sm:p-5 border-b border-silver-600/70 flex items-center gap-3">
+            <div class="section-heading-icon bg-blue-50 text-steel_azure">
+                <i class="fa-solid fa-clock-rotate-left"></i>
+            </div>
+            <div>
+                <h2 class="text-base font-bold text-slate-800">Completed Payout History</h2>
+                <p class="text-xs text-slate-500">Historical records of closed cards and disbursements.</p>
+            </div>
         </div>
 
         <div class="overflow-x-auto">
@@ -253,7 +267,9 @@ require_once __DIR__ . '/includes/header.php';
                         <tr>
                             <td colspan="8" class="text-center">
                                 <div class="empty-state">
-                                    <div class="empty-state-icon bg-slate-100">📋</div>
+                                    <div class="empty-state-icon bg-slate-100 text-slate-400">
+                                        <i class="fa-solid fa-receipt text-3xl"></i>
+                                    </div>
                                     <div class="empty-state-title">No Payout History</div>
                                     <div class="empty-state-text">Completed payout settlements will appear here.</div>
                                 </div>
@@ -267,7 +283,7 @@ require_once __DIR__ . '/includes/header.php';
                                 </td>
                                 <td class="py-3 px-4">
                                     <div class="font-bold text-slate-800"><?= htmlspecialchars($hp['customer_name']) ?></div>
-                                    <div class="text-[11px] text-slate-400"><?= htmlspecialchars($hp['account_number']) ?></div>
+                                    <div class="text-[11px] text-slate-400 font-mono"><?= htmlspecialchars($hp['account_number']) ?></div>
                                 </td>
                                 <td class="py-3 px-4 font-semibold text-slate-700 whitespace-nowrap">
                                     <?= $hp['spaces_filled'] ?> / 31 spaces
@@ -285,7 +301,7 @@ require_once __DIR__ . '/includes/header.php';
                                     <?= htmlspecialchars($hp['approved_by_name'] ?: 'N/A') ?>
                                 </td>
                                 <td class="py-3 px-4 text-right whitespace-nowrap">
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold <?= $hp['status'] === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800' ?>">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded text-[11px] font-bold <?= $hp['status'] === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800' ?>">
                                         <?= strtoupper($hp['status']) ?>
                                     </span>
                                 </td>
@@ -295,6 +311,8 @@ require_once __DIR__ . '/includes/header.php';
                 </tbody>
             </table>
         </div>
+
+        <?= render_pagination($pagedHistory['total'], $pagedHistory['per_page'], $pagedHistory['current']) ?>
     </div>
 
 </div>

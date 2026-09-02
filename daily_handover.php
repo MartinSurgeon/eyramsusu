@@ -138,16 +138,19 @@ $stmtPending = $pdo->query("
 ");
 $pendingHandovers = $stmtPending->fetchAll();
 
-// Fetch Handover History (Miller's law chunking)
+// Fetch Handover History with pagination
 $stmtHistory = $pdo->query("
     SELECT h.*, u.full_name as collector_name, admin.full_name as approved_by_name
     FROM daily_handovers h
     JOIN users u ON h.collector_id = u.id
     LEFT JOIN users admin ON h.approved_by = admin.id
     WHERE h.status = 'approved'
-    ORDER BY h.id DESC LIMIT 15
+    ORDER BY h.id DESC
 ");
-$historyHandovers = $stmtHistory->fetchAll();
+$allHistoryHandovers = $stmtHistory->fetchAll();
+$historyPage = max(1, (int)($_GET['page'] ?? 1));
+$pagedHistory = paginate_array($allHistoryHandovers, 10, $historyPage);
+$historyHandovers = $pagedHistory['items'];
 
 // Calculate current user's or selected collector's Cash in Hand
 $myCashInHand = get_collector_cash_in_hand($user['id']);
@@ -165,17 +168,16 @@ require_once __DIR__ . '/includes/header.php';
             <p class="text-xs sm:text-sm text-slate-500 mt-0.5">Reconcile physical cash collections with system calculations.</p>
         </div>
         <div>
-            <a href="<?= $user['role'] === 'admin' ? 'admin_dashboard.php' : 'collector_dashboard.php' ?>" class="text-xs font-bold text-cornflower_ocean hover:text-steel_azure">
-                &larr; Back to Home
+            <a href="<?= $user['role'] === 'admin' ? 'admin_dashboard.php' : 'collector_dashboard.php' ?>" class="text-xs font-bold text-cornflower_ocean hover:text-steel_azure inline-flex items-center gap-1.5">
+                <i class="fa-solid fa-arrow-left text-xs"></i>
+                <span>Back to Home</span>
             </a>
         </div>
     </div>
 
     <?php if (!empty($error)): ?>
         <div class="p-3.5 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-semibold flex items-center gap-2">
-            <svg class="w-5 h-5 flex-shrink-0 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
-            </svg>
+            <i class="fa-solid fa-circle-exclamation text-red-500 text-sm"></i>
             <span><?= htmlspecialchars($error) ?></span>
         </div>
     <?php endif; ?>
@@ -268,7 +270,9 @@ require_once __DIR__ . '/includes/header.php';
             <div class="divide-y divide-silver-600/60">
                 <?php if (empty($pendingHandovers)): ?>
                     <div class="empty-state">
-                        <div class="empty-state-icon bg-emerald-50">✅</div>
+                        <div class="empty-state-icon bg-emerald-50 text-emerald-600">
+                            <i class="fa-solid fa-circle-check text-3xl"></i>
+                        </div>
                         <div class="empty-state-title">All Clear</div>
                         <div class="empty-state-text">No handovers currently waiting for verification.</div>
                     </div>
@@ -278,7 +282,10 @@ require_once __DIR__ . '/includes/header.php';
                             <div>
                                 <div class="flex items-center gap-2">
                                     <span class="font-black text-sm sm:text-base text-slate-800"><?= htmlspecialchars($h['collector_name']) ?></span>
-                                    <span class="text-xs text-slate-500">📞 <?= htmlspecialchars($h['collector_phone']) ?></span>
+                                    <span class="text-xs text-slate-500 flex items-center gap-1">
+                                        <i class="fa-solid fa-phone text-[10px] text-slate-400"></i>
+                                        <?= htmlspecialchars($h['collector_phone']) ?>
+                                    </span>
                                     <span class="text-xs text-slate-400">&bull; <?= date('d M Y, h:i A', strtotime($h['submitted_at'])) ?></span>
                                 </div>
 
@@ -292,16 +299,19 @@ require_once __DIR__ . '/includes/header.php';
                                     </span>
                                     
                                     <?php if ($h['difference'] == 0): ?>
-                                        <span class="bg-emerald-50 text-emerald-800 border border-emerald-300 px-2.5 py-1 rounded-md font-bold">
-                                            ✓ Exact Match (GH₵ 0.00)
+                                        <span class="bg-emerald-50 text-emerald-800 border border-emerald-300 px-2.5 py-1 rounded-md font-bold inline-flex items-center gap-1">
+                                            <i class="fa-solid fa-check text-xs"></i>
+                                            <span>Exact Match (GH₵ 0.00)</span>
                                         </span>
                                     <?php elseif ($h['difference'] < 0): ?>
-                                        <span class="bg-red-50 text-red-700 border border-red-300 px-2.5 py-1 rounded-md font-bold">
-                                            ⚠️ Shortage: <?= format_money(abs($h['difference'])) ?>
+                                        <span class="bg-red-50 text-red-700 border border-red-300 px-2.5 py-1 rounded-md font-bold inline-flex items-center gap-1">
+                                            <i class="fa-solid fa-triangle-exclamation text-xs"></i>
+                                            <span>Shortage: <?= format_money(abs($h['difference'])) ?></span>
                                         </span>
                                     <?php else: ?>
-                                        <span class="bg-amber-50 text-pumpkin_spice border border-amber-300 px-2.5 py-1 rounded-md font-bold">
-                                            ℹ️ Overage: +<?= format_money($h['difference']) ?>
+                                        <span class="bg-amber-50 text-pumpkin_spice border border-amber-300 px-2.5 py-1 rounded-md font-bold inline-flex items-center gap-1">
+                                            <i class="fa-solid fa-circle-info text-xs"></i>
+                                            <span>Overage: +<?= format_money($h['difference']) ?></span>
                                         </span>
                                     <?php endif; ?>
                                 </div>
@@ -323,8 +333,9 @@ require_once __DIR__ . '/includes/header.php';
                                        class="px-3 py-2 text-xs rounded-xl border border-silver-600 focus:border-steel_azure outline-none transition">
 
                                 <button type="submit" 
-                                        class="btn-touch bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black px-4 py-2 shadow-sm transition whitespace-nowrap">
-                                    ✓ Confirm & Clear Liability
+                                        class="btn-touch bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black px-4 py-2 shadow-2xs rounded-xl transition whitespace-nowrap inline-flex items-center gap-1.5">
+                                    <i class="fa-solid fa-circle-check text-xs"></i>
+                                    <span>Confirm & Clear Liability</span>
                                 </button>
                             </form>
                         </div>
@@ -336,9 +347,14 @@ require_once __DIR__ . '/includes/header.php';
 
     <!-- Historical Settled Handovers Table -->
     <div class="bg-white rounded-2xl border border-silver-600 shadow-sm overflow-hidden">
-        <div class="p-4 sm:p-5 border-b border-silver-600/70">
-            <h2 class="text-base font-bold text-slate-800">Settlement History</h2>
-            <p class="text-xs text-slate-500">Record of reconciled and approved daily cash handovers.</p>
+        <div class="p-4 sm:p-5 border-b border-silver-600/70 flex items-center gap-3">
+            <div class="section-heading-icon bg-emerald-50 text-emerald-600">
+                <i class="fa-solid fa-file-invoice-dollar"></i>
+            </div>
+            <div>
+                <h2 class="text-base font-bold text-slate-800">Settlement History</h2>
+                <p class="text-xs text-slate-500">Record of reconciled and approved daily cash handovers.</p>
+            </div>
         </div>
 
         <div class="overflow-x-auto">
@@ -359,7 +375,9 @@ require_once __DIR__ . '/includes/header.php';
                         <tr>
                             <td colspan="7" class="text-center">
                                 <div class="empty-state">
-                                    <div class="empty-state-icon bg-slate-100">📦</div>
+                                    <div class="empty-state-icon bg-slate-100 text-slate-400">
+                                        <i class="fa-solid fa-box-archive text-3xl"></i>
+                                    </div>
                                     <div class="empty-state-title">No Settled Handovers</div>
                                     <div class="empty-state-text">No settled handovers yet.</div>
                                 </div>
@@ -403,6 +421,8 @@ require_once __DIR__ . '/includes/header.php';
                 </tbody>
             </table>
         </div>
+
+        <?= render_pagination($pagedHistory['total'], $pagedHistory['per_page'], $pagedHistory['current']) ?>
     </div>
 
 </div>

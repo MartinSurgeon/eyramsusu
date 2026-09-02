@@ -179,6 +179,12 @@ $stmtAll = $pdo->query("
 ");
 $collectors = $stmtAll->fetchAll();
 
+// Pagination setup
+$page = max(1, (int)($_GET['page'] ?? 1));
+$perPage = 10;
+$pagedCollectors = paginate_array($collectors, $perPage, $page);
+$displayCollectors = $pagedCollectors['items'];
+
 // Active collectors for reassignment dropdown
 $activeCollectors = array_filter($collectors, fn($col) => (int)$col['is_active'] === 1);
 
@@ -207,11 +213,9 @@ require_once __DIR__ . '/includes/header.php';
         </div>
 
         <button type="button" onclick="openAddModal()" 
-                class="btn-action-primary text-xs sm:text-sm">
-            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/>
-            </svg>
-            + Register New Collector
+                class="btn-action-primary text-xs sm:text-sm flex items-center gap-1.5">
+            <i class="fa-solid fa-user-plus text-xs"></i>
+            <span>Register New Collector</span>
         </button>
     </div>
 
@@ -227,40 +231,54 @@ require_once __DIR__ . '/includes/header.php';
     <!-- KPI Metric Summary Row -->
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         
-        <div class="kpi-card">
-            <div class="kpi-icon bg-blue-50 text-steel_azure">🏃</div>
-            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Active Field Agents</span>
-            <div class="text-xl sm:text-2xl font-black text-steel_azure mt-1">
-                <?= $activeCount ?> <span class="text-xs text-slate-400 font-normal">/ <?= $totalCollectors ?></span>
+        <div class="kpi-card flex flex-col justify-between">
+            <div>
+                <div class="kpi-icon bg-blue-50 text-steel_azure"><i class="fa-solid fa-users"></i></div>
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mt-2">Active Field Agents</span>
+                <div class="text-xl sm:text-2xl font-black text-steel_azure mt-1">
+                    <?= $activeCount ?> <span class="text-xs text-slate-400 font-normal">/ <?= $totalCollectors ?></span>
+                </div>
             </div>
-            <span class="text-[11px] text-slate-400 mt-0.5">Authorized collectors</span>
+            <span class="text-[11px] text-slate-400 mt-2">Authorized collectors</span>
         </div>
 
-        <div class="kpi-card">
-            <div class="kpi-icon bg-orange-50 text-pumpkin_spice">💼</div>
-            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Cash in Field</span>
-            <div class="text-xl sm:text-2xl font-black <?= $totalCashInHands > 0 ? 'text-pumpkin_spice' : 'text-slate-600' ?> mt-1">
-                <?= format_money($totalCashInHands) ?>
+        <div class="kpi-card flex flex-col justify-between">
+            <div>
+                <div class="kpi-icon bg-orange-50 text-pumpkin_spice"><i class="fa-solid fa-sack-dollar"></i></div>
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mt-2">Total Cash in Field</span>
+                <div class="text-xl sm:text-2xl font-black <?= $totalCashInHands > 0 ? 'text-pumpkin_spice' : 'text-slate-600' ?> mt-1">
+                    <?= format_money($totalCashInHands) ?>
+                </div>
             </div>
-            <a href="daily_handover.php" class="text-[11px] text-cornflower_ocean font-semibold hover:underline mt-0.5">Awaiting handover &rarr;</a>
+            <a href="daily_handover.php" class="btn-touch mt-3 w-full py-1.5 px-3 rounded-xl text-xs font-bold bg-orange-50 text-pumpkin_spice hover:bg-pumpkin_spice hover:text-white border border-orange-200 transition shadow-2xs flex items-center justify-center gap-1.5">
+                <span>View Handovers</span>
+                <i class="fa-solid fa-arrow-right text-[10px]"></i>
+            </a>
         </div>
 
-        <div class="kpi-card">
-            <div class="kpi-icon bg-emerald-50 text-emerald-600">👥</div>
-            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Assigned Clients</span>
-            <div class="text-xl sm:text-2xl font-black text-emerald-700 mt-1">
-                <?= $totalAssignedClients ?>
+        <div class="kpi-card flex flex-col justify-between">
+            <div>
+                <div class="kpi-icon bg-emerald-50 text-emerald-600"><i class="fa-solid fa-user-group"></i></div>
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mt-2">Assigned Clients</span>
+                <div class="text-xl sm:text-2xl font-black text-emerald-700 mt-1">
+                    <?= $totalAssignedClients ?>
+                </div>
             </div>
-            <span class="text-[11px] text-slate-400 mt-0.5">On active collector routes</span>
+            <a href="customers.php" class="btn-touch mt-3 w-full py-1.5 px-3 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white border border-emerald-200 transition shadow-2xs flex items-center justify-center gap-1.5">
+                <span>View Clients</span>
+                <i class="fa-solid fa-arrow-right text-[10px]"></i>
+            </a>
         </div>
 
-        <div class="kpi-card">
-            <div class="kpi-icon bg-purple-50 text-purple-700">🔒</div>
-            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Audit Security</span>
-            <div class="text-base sm:text-lg font-black text-slate-800 mt-1">
-                100% Protected
+        <div class="kpi-card flex flex-col justify-between">
+            <div>
+                <div class="kpi-icon bg-purple-50 text-purple-700"><i class="fa-solid fa-shield-halved"></i></div>
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mt-2">Audit Security</span>
+                <div class="text-base sm:text-lg font-black text-slate-800 mt-1">
+                    100% Protected
+                </div>
             </div>
-            <span class="text-[11px] text-slate-400 mt-0.5">History preserved on deactivation</span>
+            <span class="text-[11px] text-slate-400 mt-2">History preserved</span>
         </div>
 
     </div>
@@ -269,7 +287,9 @@ require_once __DIR__ . '/includes/header.php';
     <div class="bg-white rounded-2xl border border-silver-600 shadow-sm overflow-hidden">
         <div class="p-4 sm:p-5 border-b border-silver-600/70 flex items-center justify-between">
             <div class="flex items-center gap-3">
-                <div class="section-heading-icon bg-blue-50 text-steel_azure">📋</div>
+                <div class="section-heading-icon bg-blue-50 text-steel_azure">
+                    <i class="fa-solid fa-users-gear"></i>
+                </div>
                 <div>
                     <h2 class="text-base font-bold text-slate-800">Collectors Registry</h2>
                     <p class="text-xs text-slate-500">Overview of collector login status, customer count, and liability.</p>
@@ -292,25 +312,30 @@ require_once __DIR__ . '/includes/header.php';
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-silver-600/50">
-                    <?php if (empty($collectors)): ?>
+                    <?php if (empty($displayCollectors)): ?>
                         <tr>
                             <td colspan="7" class="text-center">
                                 <div class="empty-state">
-                                    <div class="empty-state-icon bg-blue-50">🏃</div>
+                                    <div class="empty-state-icon bg-blue-50 text-steel_azure">
+                                        <i class="fa-solid fa-users text-3xl"></i>
+                                    </div>
                                     <div class="empty-state-title">No Collectors Registered</div>
                                     <div class="empty-state-text">Add your first field collector to begin managing savings routes.</div>
                                 </div>
                             </td>
                         </tr>
                     <?php else: ?>
-                        <?php foreach ($collectors as $col): ?>
+                        <?php foreach ($displayCollectors as $col): ?>
                             <tr class="hover:bg-platinum-800 transition <?= (int)$col['is_active'] === 0 ? 'opacity-60 bg-slate-50' : '' ?>">
                                 <td class="py-3 px-4">
                                     <div class="font-bold text-slate-800 text-sm"><?= htmlspecialchars($col['full_name']) ?></div>
                                     <div class="text-[11px] text-slate-400 font-mono">@<?= htmlspecialchars($col['username']) ?></div>
                                 </td>
                                 <td class="py-3 px-4 text-slate-600">
-                                    📞 <?= htmlspecialchars($col['phone'] ?: 'N/A') ?>
+                                    <div class="flex items-center gap-1.5">
+                                        <i class="fa-solid fa-phone text-slate-400 text-[11px]"></i>
+                                        <span><?= htmlspecialchars($col['phone'] ?: 'N/A') ?></span>
+                                    </div>
                                 </td>
                                 <td class="py-3 px-4">
                                     <a href="customers.php" class="inline-flex items-center gap-1 font-bold text-steel_azure hover:underline">
@@ -339,24 +364,27 @@ require_once __DIR__ . '/includes/header.php';
                                         <!-- Edit Button -->
                                         <button type="button" 
                                                 onclick='openEditModal(<?= json_encode($col) ?>)'
-                                                class="btn-touch px-3 py-1.5 bg-white hover:bg-platinum text-steel_azure border border-steel_azure text-xs font-bold rounded-lg transition">
-                                            Edit
+                                                class="btn-touch px-3 py-1.5 bg-white hover:bg-platinum text-steel_azure border border-steel_azure text-xs font-bold rounded-xl transition inline-flex items-center gap-1.5">
+                                            <i class="fa-solid fa-pen-to-square text-xs"></i>
+                                            <span>Edit</span>
                                         </button>
 
                                         <?php if ((int)$col['is_active'] === 1): ?>
                                             <!-- Deactivate / Reassign Button -->
-                                            <button type="button"
+                                            <button type="button" 
                                                     onclick='openDeactivateModal(<?= json_encode($col) ?>)'
-                                                    class="btn-touch px-3 py-1.5 bg-white hover:bg-red-50 text-red-600 border border-red-300 text-xs font-bold rounded-lg transition">
-                                                Deactivate
+                                                    class="btn-touch px-3 py-1.5 bg-white hover:bg-red-50 text-red-600 border border-red-300 text-xs font-bold rounded-xl transition inline-flex items-center gap-1.5">
+                                                <i class="fa-solid fa-user-slash text-xs"></i>
+                                                <span>Deactivate</span>
                                             </button>
                                         <?php else: ?>
                                             <!-- Reactivate Form -->
                                             <form method="POST" action="collectors.php" class="inline" onsubmit="return confirm('Reactivate collector <?= addslashes($col['full_name']) ?>?');">
                                                 <input type="hidden" name="action" value="reactivate_collector">
                                                 <input type="hidden" name="collector_id" value="<?= $col['id'] ?>">
-                                                <button type="submit" class="btn-touch px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition">
-                                                    Reactivate
+                                                <button type="submit" class="btn-touch px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition inline-flex items-center gap-1.5 shadow-2xs">
+                                                    <i class="fa-solid fa-rotate-left text-xs"></i>
+                                                    <span>Reactivate</span>
                                                 </button>
                                             </form>
                                         <?php endif; ?>
@@ -368,6 +396,8 @@ require_once __DIR__ . '/includes/header.php';
                 </tbody>
             </table>
         </div>
+
+        <?= render_pagination($pagedCollectors['total'], $pagedCollectors['per_page'], $pagedCollectors['current']) ?>
     </div>
 
 </div>

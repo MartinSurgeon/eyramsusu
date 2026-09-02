@@ -158,16 +158,15 @@ require_once __DIR__ . '/includes/header.php';
             <h1 class="text-xl sm:text-2xl font-black text-steel_azure">Record Susu Deposit</h1>
             <p class="text-xs text-slate-500 mt-0.5">Collect cash, stamp spaces, and store remaining change.</p>
         </div>
-        <a href="<?= $user['role'] === 'admin' ? 'admin_dashboard.php' : 'collector_dashboard.php' ?>" class="text-xs font-bold text-cornflower_ocean hover:text-steel_azure">
-            &larr; Back to Home
+        <a href="<?= $user['role'] === 'admin' ? 'admin_dashboard.php' : 'collector_dashboard.php' ?>" class="text-xs font-bold text-cornflower_ocean hover:text-steel_azure inline-flex items-center gap-1.5">
+            <i class="fa-solid fa-arrow-left text-xs"></i>
+            <span>Back to Home</span>
         </a>
     </div>
 
     <?php if (!empty($error)): ?>
         <div class="p-3.5 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-semibold flex items-center gap-2">
-            <svg class="w-5 h-5 flex-shrink-0 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
-            </svg>
+            <i class="fa-solid fa-circle-exclamation text-red-500 text-sm"></i>
             <span><?= htmlspecialchars($error) ?></span>
         </div>
     <?php endif; ?>
@@ -207,8 +206,9 @@ require_once __DIR__ . '/includes/header.php';
                 <div class="bg-platinum-800 p-4 rounded-xl border border-silver-600/80">
                     <div class="flex items-center justify-between text-xs font-bold text-slate-700 pb-2 border-b border-silver-600">
                         <span>Card #<?= $activeCustomer['card_number'] ?> Status</span>
-                        <a href="view_card.php?id=<?= $activeCustomer['card_id'] ?>" target="_blank" class="text-steel_azure hover:underline font-semibold">
-                            Open 31-Space Card ↗
+                        <a href="view_card.php?id=<?= $activeCustomer['card_id'] ?>" target="_blank" class="text-steel_azure hover:underline font-semibold inline-flex items-center gap-1">
+                            <span>Open 31-Space Card</span>
+                            <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
                         </a>
                     </div>
                     <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-2.5 text-xs">
@@ -313,8 +313,9 @@ require_once __DIR__ . '/includes/header.php';
                 <!-- Submit Action Button (Clean In-Flow inside card per user decision) -->
                 <div class="pt-5 border-t border-silver-600/60">
                     <button type="submit" 
-                            class="w-full btn-action-primary text-white font-extrabold text-base tracking-wide transition">
-                        ✓ Confirm Cash & Stamp Spaces
+                            class="w-full btn-action-primary text-white font-extrabold text-base tracking-wide transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-circle-check text-base"></i>
+                        <span>Confirm Cash & Stamp Spaces</span>
                     </button>
                 </div>
 

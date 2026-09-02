@@ -307,3 +307,107 @@ function get_asset_url($assetType = 'css') {
     return '';
 }
 
+/**
+ * Paginates an array of items
+ * Returns: ['items' => array, 'total' => int, 'pages' => int, 'current' => int, 'per_page' => int, 'start' => int, 'end' => int]
+ */
+function paginate_array(array $items, int $perPage = 10, int $currentPage = 1): array {
+    $total = count($items);
+    $pages = max(1, (int)ceil($total / $perPage));
+    $currentPage = max(1, min($currentPage, $pages));
+    $offset = ($currentPage - 1) * $perPage;
+    $pagedItems = array_slice($items, $offset, $perPage);
+    $start = $total > 0 ? $offset + 1 : 0;
+    $end = min($offset + $perPage, $total);
+
+    return [
+        'items' => $pagedItems,
+        'total' => $total,
+        'pages' => $pages,
+        'current' => $currentPage,
+        'per_page' => $perPage,
+        'start' => $start,
+        'end' => $end
+    ];
+}
+
+/**
+ * Renders HTML pagination controls with Font Awesome icons, page numbers, and item counts.
+ * Automatically preserves existing $_GET parameters.
+ */
+function render_pagination(int $totalItems, int $perPage, int $currentPage, string $paramName = 'page'): string {
+    $totalPages = (int)ceil($totalItems / $perPage);
+    if ($totalPages <= 1) {
+        return '';
+    }
+
+    $currentPage = max(1, min($currentPage, $totalPages));
+    $startItem = ($currentPage - 1) * $perPage + 1;
+    $endItem = min($currentPage * $perPage, $totalItems);
+
+    // Build URL query base preserving existing params
+    $queryParams = $_GET;
+
+    $buildUrl = function($pageNum) use ($queryParams, $paramName) {
+        $queryParams[$paramName] = $pageNum;
+        return '?' . http_build_query($queryParams);
+    };
+
+    $html = '<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 bg-slate-50 border-t border-silver-600/70 text-xs text-slate-600 rounded-b-2xl">';
+    
+    // Left: Showing X to Y of Z
+    $html .= '<div class="font-medium">';
+    $html .= 'Showing <strong class="text-slate-800">' . $startItem . '</strong> to <strong class="text-slate-800">' . $endItem . '</strong> of <strong class="text-slate-800">' . $totalItems . '</strong> records';
+    $html .= '</div>';
+
+    // Right: Pagination Buttons
+    $html .= '<div class="flex items-center gap-1.5 flex-wrap">';
+
+    // Previous Button
+    if ($currentPage > 1) {
+        $html .= '<a href="' . htmlspecialchars($buildUrl($currentPage - 1)) . '" class="btn-touch px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-silver-600 font-bold transition flex items-center gap-1 shadow-2xs"><i class="fa-solid fa-chevron-left text-[10px]"></i><span>Prev</span></a>';
+    } else {
+        $html .= '<span class="px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed font-bold flex items-center gap-1"><i class="fa-solid fa-chevron-left text-[10px]"></i><span>Prev</span></span>';
+    }
+
+    // Page Numbers (Display up to 5 surrounding pages)
+    $startPage = max(1, $currentPage - 2);
+    $endPage = min($totalPages, $startPage + 4);
+    if ($endPage - $startPage < 4) {
+        $startPage = max(1, $endPage - 4);
+    }
+
+    if ($startPage > 1) {
+        $html .= '<a href="' . htmlspecialchars($buildUrl(1)) . '" class="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-silver-600 font-bold transition shadow-2xs">1</a>';
+        if ($startPage > 2) {
+            $html .= '<span class="px-1 text-slate-400">&hellip;</span>';
+        }
+    }
+
+    for ($i = $startPage; $i <= $endPage; $i++) {
+        if ($i === $currentPage) {
+            $html .= '<span class="px-2.5 py-1.5 rounded-lg bg-steel_azure text-white font-extrabold shadow-xs">' . $i . '</span>';
+        } else {
+            $html .= '<a href="' . htmlspecialchars($buildUrl($i)) . '" class="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-silver-600 font-bold transition shadow-2xs">' . $i . '</a>';
+        }
+    }
+
+    if ($endPage < $totalPages) {
+        if ($endPage < $totalPages - 1) {
+            $html .= '<span class="px-1 text-slate-400">&hellip;</span>';
+        }
+        $html .= '<a href="' . htmlspecialchars($buildUrl($totalPages)) . '" class="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-silver-600 font-bold transition shadow-2xs">' . $totalPages . '</a>';
+    }
+
+    // Next Button
+    if ($currentPage < $totalPages) {
+        $html .= '<a href="' . htmlspecialchars($buildUrl($currentPage + 1)) . '" class="btn-touch px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-silver-600 font-bold transition flex items-center gap-1 shadow-2xs"><span>Next</span><i class="fa-solid fa-chevron-right text-[10px]"></i></a>';
+    } else {
+        $html .= '<span class="px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed font-bold flex items-center gap-1"><span>Next</span><i class="fa-solid fa-chevron-right text-[10px]"></i></span>';
+    }
+
+    $html .= '</div></div>';
+
+    return $html;
+}
+
