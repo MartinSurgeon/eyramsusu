@@ -166,37 +166,419 @@ function initDepositCalculator() {
 }
 
 /**
- * Real-time instant search filter for customer lists
+ * Real-time asynchronous and robust search engine for customers
+ * Queries entire MySQL database across all pages via api_search_customers.php
+ * Handles diacritics, keyboard shortcuts (/), loading spinner, and 1-tap clear.
  */
 function initCustomerFilter() {
     const searchInput = document.getElementById('customer_search');
     if (!searchInput) return;
 
-    const rows = document.querySelectorAll('.customer-row');
+    const tableBody = document.getElementById('customers_table_body');
+    const mobileContainer = document.getElementById('customers_mobile_container');
+    const paginationContainer = document.getElementById('customers_pagination_container');
     const emptyNotice = document.getElementById('search_empty_notice');
+    const searchSpinner = document.getElementById('search_spinner');
+    const searchClearBtn = document.getElementById('search_clear_btn');
+    const totalCountBadge = document.getElementById('total_customers_count');
+    const filterBanner = document.getElementById('search_filter_banner');
 
-    searchInput.addEventListener('input', () => {
-        const query = searchInput.value.toLowerCase().trim();
-        let visibleCount = 0;
+    // Cache initial server-rendered HTML for zero-delay reset
+    const originalTableHTML = tableBody ? tableBody.innerHTML : null;
+    const originalMobileHTML = mobileContainer ? mobileContainer.innerHTML : null;
+    const originalPaginationHTML = paginationContainer ? paginationContainer.innerHTML : null;
+    const originalCountText = totalCountBadge ? totalCountBadge.textContent : null;
 
-        rows.forEach(row => {
-            const text = row.getAttribute('data-search') || row.textContent.toLowerCase();
-            if (text.toLowerCase().includes(query)) {
-                row.style.display = '';
-                visibleCount++;
-            } else {
-                row.style.display = 'none';
-            }
-        });
+    let debounceTimer = null;
+    let activeFetchAbort = null;
+    const userRole = (window.eyramConfig && window.eyramConfig.userRole) || 'collector';
 
-        if (emptyNotice) {
-            if (visibleCount === 0 && rows.length > 0) {
-                emptyNotice.classList.remove('hidden');
-            } else {
-                emptyNotice.classList.add('hidden');
+    // Normalize text (accent folding) helper
+    function normalizeText(str) {
+        return (str || '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .trim();
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    function resetToOriginal() {
+        if (activeFetchAbort) {
+            activeFetchAbort.abort();
+            activeFetchAbort = null;
+        }
+        if (searchSpinner) searchSpinner.classList.add('hidden');
+        if (searchClearBtn) searchClearBtn.classList.add('hidden');
+        if (emptyNotice) emptyNotice.classList.add('hidden');
+
+        if (tableBody && originalTableHTML !== null) tableBody.innerHTML = originalTableHTML;
+        if (mobileContainer && originalMobileHTML !== null) mobileContainer.innerHTML = originalMobileHTML;
+        if (paginationContainer && originalPaginationHTML !== null) paginationContainer.innerHTML = originalPaginationHTML;
+        if (totalCountBadge && originalCountText !== null) totalCountBadge.textContent = originalCountText;
+
+        // If local DOM rows exist (e.g. collector dashboard fallback)
+        const localRows = document.querySelectorAll('.customer-row');
+        localRows.forEach(row => row.style.display = '');
+    }
+
+    // Keyboard shortcut: Pressing "/" focuses search input
+    document.addEventListener('keydown', (e) => {
+        if (e.key === '/' && document.activeElement !== searchInput) {
+            const tag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+            if (tag !== 'input' && tag !== 'textarea' && tag !== 'select') {
+                e.preventDefault();
+                searchInput.focus();
+                searchInput.select();
             }
         }
     });
+
+    // Clear Button Handler
+    if (searchClearBtn) {
+        searchClearBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            resetToOriginal();
+            if (filterBanner) filterBanner.classList.add('hidden');
+            searchInput.focus();
+        });
+    }
+
+    // Input Search Listener with Debounce
+    searchInput.addEventListener('input', () => {
+        const query = searchInput.value.trim();
+
+        if (searchClearBtn) {
+            if (query.length > 0) {
+                searchClearBtn.classList.remove('hidden');
+            } else {
+                searchClearBtn.classList.add('hidden');
+            }
+        }
+
+        if (query.length === 0) {
+            resetToOriginal();
+            if (filterBanner) filterBanner.classList.add('hidden');
+            return;
+        }
+
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+            performCustomerSearch(query);
+        }, 250);
+    });
+
+    function performCustomerSearch(query) {
+        // If we are on customers.php with tableBody & mobileContainer
+        if (tableBody && mobileContainer) {
+            if (activeFetchAbort) {
+                activeFetchAbort.abort();
+            }
+            activeFetchAbort = new AbortController();
+
+            if (searchSpinner) searchSpinner.classList.remove('hidden');
+
+            fetch(`api_search_customers.php?q=${encodeURIComponent(query)}`, {
+                signal: activeFetchAbort.signal
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (searchSpinner) searchSpinner.classList.add('hidden');
+                activeFetchAbort = null;
+
+                if (!data.success) {
+                    console.error('Search error:', data.message);
+                    return;
+                }
+
+                renderSearchResults(data.customers, query);
+            })
+            .catch(err => {
+                if (err.name === 'AbortError') return;
+                if (searchSpinner) searchSpinner.classList.add('hidden');
+                console.error('Failed to search customers:', err);
+            });
+        } else {
+            // Local DOM-only fallback (for simple single-page views)
+            const normalizedQuery = normalizeText(query);
+            const localRows = document.querySelectorAll('.customer-row');
+            let visibleCount = 0;
+
+            localRows.forEach(row => {
+                const text = normalizeText(row.getAttribute('data-search') || row.textContent);
+                if (text.includes(normalizedQuery)) {
+                    row.style.display = '';
+                    visibleCount++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            if (emptyNotice) {
+                if (visibleCount === 0 && localRows.length > 0) {
+                    emptyNotice.classList.remove('hidden');
+                } else {
+                    emptyNotice.classList.add('hidden');
+                }
+            }
+        }
+    }
+
+    function renderSearchResults(customers, query) {
+        if (paginationContainer) paginationContainer.innerHTML = '';
+        if (filterBanner) filterBanner.classList.add('hidden');
+
+        if (totalCountBadge) {
+            totalCountBadge.textContent = `${customers.length} found`;
+        }
+
+        if (customers.length === 0) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="6" class="text-center py-10">
+                        <div class="empty-state">
+                            <div class="empty-state-icon bg-slate-100 text-slate-400">
+                                <i class="fa-solid fa-magnifying-glass text-2xl"></i>
+                            </div>
+                            <div class="empty-state-title">No matching clients found</div>
+                            <div class="empty-state-text">No clients match "<strong>${escapeHtml(query)}</strong>" across the entire database.</div>
+                        </div>
+                    </td>
+                </tr>
+            `;
+            mobileContainer.innerHTML = `
+                <div class="p-6 text-center">
+                    <div class="empty-state">
+                        <div class="empty-state-icon bg-slate-100 text-slate-400 mx-auto">
+                            <i class="fa-solid fa-magnifying-glass text-2xl"></i>
+                        </div>
+                        <div class="empty-state-title mt-2">No matching clients found</div>
+                        <div class="empty-state-text text-xs text-slate-500">No clients match "<strong>${escapeHtml(query)}</strong>" across the entire database.</div>
+                    </div>
+                </div>
+            `;
+            if (emptyNotice) emptyNotice.classList.add('hidden');
+            return;
+        }
+
+        if (emptyNotice) emptyNotice.classList.add('hidden');
+
+        // Render Desktop Table Rows
+        tableBody.innerHTML = '';
+        customers.forEach(c => {
+            const tr = document.createElement('tr');
+            tr.className = 'customer-row hover:bg-platinum-800 transition';
+            tr.setAttribute('data-search', `${c.full_name} ${c.account_number} ${c.phone} ${c.location} ${c.collector_name}`);
+
+            let cardColHtml = '';
+            if (c.card_id) {
+                cardColHtml = `
+                    <div class="font-bold text-steel_azure">${c.daily_amount_formatted} / space</div>
+                    <div class="text-[11px] text-emerald-600 font-semibold">${c.spaces_filled} of ${c.total_spaces} spaces (${c.total_saved_formatted})</div>
+                `;
+            } else {
+                cardColHtml = `
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-amber-600 font-semibold">No active card</span>
+                        ${userRole === 'admin' ? `
+                            <form method="POST" action="start_new_card.php" class="inline">
+                                <input type="hidden" name="customer_id" value="${c.id}">
+                                <input type="hidden" name="daily_amount" value="${c.daily_amount > 0 ? c.daily_amount : 20.00}">
+                                <button type="submit" class="px-2 py-0.5 bg-pumpkin_spice-900 hover:bg-pumpkin_spice text-pumpkin_spice hover:text-white border border-pumpkin_spice text-[10px] font-bold rounded-md transition cursor-pointer">
+                                    + Open
+                                </button>
+                            </form>
+                        ` : ''}
+                    </div>
+                `;
+            }
+
+            const floatColor = c.change_balance > 0 ? 'text-pumpkin_spice' : 'text-slate-400';
+
+            let actionsHtml = '';
+            if (c.card_id) {
+                actionsHtml += `
+                    <a href="record_deposit.php?customer_id=${c.id}" class="btn-touch px-3 py-1.5 bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-bold rounded-xl shadow-2xs transition inline-flex items-center gap-1.5">
+                        <i class="fa-solid fa-plus text-xs"></i>
+                        <span>Deposit</span>
+                    </a>
+                    <a href="view_card.php?id=${c.card_id}" class="btn-touch px-3 py-1.5 bg-white hover:bg-platinum text-steel_azure border border-steel_azure text-xs font-bold rounded-xl transition inline-flex items-center gap-1.5">
+                        <i class="fa-solid fa-id-card text-xs"></i>
+                        <span>Card</span>
+                    </a>
+                `;
+            } else if (userRole === 'admin') {
+                actionsHtml += `
+                    <form method="POST" action="start_new_card.php" class="inline">
+                        <input type="hidden" name="customer_id" value="${c.id}">
+                        <input type="hidden" name="daily_amount" value="${c.daily_amount > 0 ? c.daily_amount : 20.00}">
+                        <button type="submit" class="btn-touch px-3 py-1.5 bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold rounded-xl shadow-2xs transition inline-flex items-center gap-1.5 cursor-pointer">
+                            <i class="fa-solid fa-circle-plus text-xs"></i>
+                            <span>+ Open Card</span>
+                        </button>
+                    </form>
+                `;
+            }
+
+            tr.innerHTML = `
+                <td class="py-3 px-4">
+                    <div class="font-bold text-slate-800 text-sm">${escapeHtml(c.full_name)}</div>
+                    <div class="text-[11px] font-semibold text-slate-400 font-mono">${escapeHtml(c.account_number)}</div>
+                </td>
+                <td class="py-3 px-4 text-slate-600">
+                    <div class="flex items-center gap-1.5">
+                        <i class="fa-solid fa-phone text-slate-400 text-[11px]"></i>
+                        <span>${escapeHtml(c.phone)}</span>
+                    </div>
+                    <div class="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5">
+                        <i class="fa-solid fa-location-dot text-slate-400 text-[11px]"></i>
+                        <span>${escapeHtml(c.location)}</span>
+                    </div>
+                </td>
+                <td class="py-3 px-4 text-slate-700 font-medium">${escapeHtml(c.collector_name)}</td>
+                <td class="py-3 px-4">${cardColHtml}</td>
+                <td class="py-3 px-4">
+                    <span class="font-bold ${floatColor}">${c.change_balance_formatted}</span>
+                </td>
+                <td class="py-3 px-4 text-right whitespace-nowrap">
+                    <div class="flex items-center justify-end gap-2">
+                        ${actionsHtml}
+                    </div>
+                </td>
+            `;
+
+            // Append Edit button safely with JS event listener if Admin
+            if (userRole === 'admin' && typeof window.openEditCustomerModal === 'function') {
+                const actionsContainer = tr.querySelector('td:last-child > div');
+                const editBtn = document.createElement('button');
+                editBtn.type = 'button';
+                editBtn.className = 'btn-touch px-2.5 py-1.5 bg-blue-50 hover:bg-steel_azure hover:text-white text-steel_azure border border-blue-200 text-xs font-bold rounded-xl transition inline-flex items-center gap-1.5 cursor-pointer';
+                editBtn.title = 'Edit Customer & Plan';
+                editBtn.innerHTML = '<i class="fa-solid fa-pen-to-square text-xs"></i><span>Edit</span>';
+                editBtn.addEventListener('click', () => {
+                    window.openEditCustomerModal({
+                        id: c.id,
+                        full_name: c.full_name,
+                        account_number: c.account_number,
+                        phone: c.phone,
+                        location: c.location,
+                        collector_id: c.assigned_collector_id,
+                        collector_name: c.collector_name,
+                        card_id: c.card_id,
+                        card_number: c.card_number,
+                        daily_amount: c.daily_amount,
+                        spaces_filled: c.spaces_filled,
+                        total_spaces: c.total_spaces,
+                        total_saved: c.total_saved
+                    });
+                });
+                actionsContainer.appendChild(editBtn);
+            }
+
+            tableBody.appendChild(tr);
+        });
+
+        // Render Mobile Cards
+        mobileContainer.innerHTML = '';
+        customers.forEach(c => {
+            const card = document.createElement('div');
+            card.className = 'customer-row p-4';
+            card.setAttribute('data-search', `${c.full_name} ${c.account_number} ${c.phone} ${c.location} ${c.collector_name}`);
+
+            let cardHeaderBadge = '';
+            if (c.card_id) {
+                cardHeaderBadge = `
+                    <span class="text-xs font-bold text-steel_azure bg-platinum px-2 py-0.5 rounded border border-silver-600">
+                        ${c.daily_amount_formatted}
+                    </span>
+                `;
+            }
+
+            let cardSavedDetails = '';
+            if (c.card_id) {
+                cardSavedDetails = `
+                    <div class="mt-2 text-xs text-slate-600">
+                        Saved: <strong class="text-emerald-700">${c.total_saved_formatted}</strong> (${c.spaces_filled}/${c.total_spaces} spaces)
+                        ${c.change_balance > 0 ? `&bull; Float: <strong class="text-pumpkin_spice">${c.change_balance_formatted}</strong>` : ''}
+                    </div>
+                `;
+            }
+
+            let mobileActions = '';
+            if (c.card_id) {
+                mobileActions += `
+                    <a href="record_deposit.php?customer_id=${c.id}" class="flex-1 btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-bold py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-2xs">
+                        <i class="fa-solid fa-plus text-xs"></i>
+                        <span>Deposit</span>
+                    </a>
+                    <a href="view_card.php?id=${c.card_id}" class="flex-1 btn-touch bg-white hover:bg-platinum text-steel_azure border border-steel_azure text-xs font-bold py-2 rounded-xl flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-id-card text-xs"></i>
+                        <span>Card</span>
+                    </a>
+                `;
+            } else if (userRole === 'admin') {
+                mobileActions += `
+                    <form method="POST" action="start_new_card.php" class="flex-1">
+                        <input type="hidden" name="customer_id" value="${c.id}">
+                        <input type="hidden" name="daily_amount" value="${c.daily_amount > 0 ? c.daily_amount : 20.00}">
+                        <button type="submit" class="w-full btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer">
+                            <i class="fa-solid fa-circle-plus text-xs"></i>
+                            <span>+ Open Susu Card</span>
+                        </button>
+                    </form>
+                `;
+            }
+
+            card.innerHTML = `
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="font-extrabold text-sm text-slate-800">${escapeHtml(c.full_name)}</div>
+                        <div class="text-[11px] text-slate-500 font-mono">${escapeHtml(c.account_number)} &bull; ${escapeHtml(c.phone)}</div>
+                    </div>
+                    ${cardHeaderBadge}
+                </div>
+                ${cardSavedDetails}
+                <div class="mt-3 flex items-center gap-2 pt-2 border-t border-silver-600/60">
+                    ${mobileActions}
+                </div>
+            `;
+
+            if (userRole === 'admin' && typeof window.openEditCustomerModal === 'function') {
+                const actionsRow = card.querySelector('.border-t');
+                const editBtn = document.createElement('button');
+                editBtn.type = 'button';
+                editBtn.className = 'px-3 py-2 bg-blue-50 hover:bg-steel_azure hover:text-white text-steel_azure border border-blue-200 text-xs font-bold rounded-xl transition inline-flex items-center justify-center gap-1.5 cursor-pointer';
+                editBtn.title = 'Edit Customer';
+                editBtn.innerHTML = '<i class="fa-solid fa-pen-to-square text-xs"></i><span>Edit</span>';
+                editBtn.addEventListener('click', () => {
+                    window.openEditCustomerModal({
+                        id: c.id,
+                        full_name: c.full_name,
+                        account_number: c.account_number,
+                        phone: c.phone,
+                        location: c.location,
+                        collector_id: c.assigned_collector_id,
+                        collector_name: c.collector_name,
+                        card_id: c.card_id,
+                        card_number: c.card_number,
+                        daily_amount: c.daily_amount,
+                        spaces_filled: c.spaces_filled,
+                        total_spaces: c.total_spaces,
+                        total_saved: c.total_saved
+                    });
+                });
+                actionsRow.appendChild(editBtn);
+            }
+
+            mobileContainer.appendChild(card);
+        });
+    }
 }
 
 /**

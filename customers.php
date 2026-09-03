@@ -64,29 +64,61 @@ if ($user['role'] === 'admin') {
     $collectorsList = $stmtCol->fetchAll();
 }
 
-// If collector, show their assigned customers by default
-if ($user['role'] === 'collector') {
-    $stmt = $pdo->prepare("
-        SELECT c.*, u.full_name as collector_name,
-               sc.id as card_id, sc.card_number, sc.daily_amount, sc.spaces_filled, sc.total_spaces, sc.total_saved, sc.status as card_status
-        FROM customers c
-        LEFT JOIN users u ON c.assigned_collector_id = u.id
-        LEFT JOIN susu_cards sc ON c.id = sc.customer_id AND sc.status = 'active'
-        WHERE c.assigned_collector_id = ? AND c.is_active = 1
-        ORDER BY c.full_name ASC
-    ");
-    $stmt->execute([$user['id']]);
+// Search Query parameter support (server-side & URL fallback)
+$searchQuery = trim($_GET['search'] ?? $_GET['q'] ?? '');
+
+if ($searchQuery !== '') {
+    $searchWildcard = '%' . $searchQuery . '%';
+    if ($user['role'] === 'collector') {
+        $stmt = $pdo->prepare("
+            SELECT c.*, u.full_name as collector_name,
+                   sc.id as card_id, sc.card_number, sc.daily_amount, sc.spaces_filled, sc.total_spaces, sc.total_saved, sc.status as card_status
+            FROM customers c
+            LEFT JOIN users u ON c.assigned_collector_id = u.id
+            LEFT JOIN susu_cards sc ON c.id = sc.customer_id AND sc.status = 'active'
+            WHERE c.assigned_collector_id = ? AND c.is_active = 1
+              AND (c.full_name LIKE ? OR c.account_number LIKE ? OR c.phone LIKE ? OR c.location LIKE ?)
+            ORDER BY c.full_name ASC
+        ");
+        $stmt->execute([$user['id'], $searchWildcard, $searchWildcard, $searchWildcard, $searchWildcard]);
+    } else {
+        $stmt = $pdo->prepare("
+            SELECT c.*, u.full_name as collector_name,
+                   sc.id as card_id, sc.card_number, sc.daily_amount, sc.spaces_filled, sc.total_spaces, sc.total_saved, sc.status as card_status
+            FROM customers c
+            LEFT JOIN users u ON c.assigned_collector_id = u.id
+            LEFT JOIN susu_cards sc ON c.id = sc.customer_id AND sc.status = 'active'
+            WHERE c.is_active = 1
+              AND (c.full_name LIKE ? OR c.account_number LIKE ? OR c.phone LIKE ? OR c.location LIKE ? OR u.full_name LIKE ?)
+            ORDER BY c.full_name ASC
+        ");
+        $stmt->execute([$searchWildcard, $searchWildcard, $searchWildcard, $searchWildcard, $searchWildcard]);
+    }
 } else {
-    // Admin sees all customers
-    $stmt = $pdo->query("
-        SELECT c.*, u.full_name as collector_name,
-               sc.id as card_id, sc.card_number, sc.daily_amount, sc.spaces_filled, sc.total_spaces, sc.total_saved, sc.status as card_status
-        FROM customers c
-        LEFT JOIN users u ON c.assigned_collector_id = u.id
-        LEFT JOIN susu_cards sc ON c.id = sc.customer_id AND sc.status = 'active'
-        WHERE c.is_active = 1
-        ORDER BY c.full_name ASC
-    ");
+    // If collector, show their assigned customers by default
+    if ($user['role'] === 'collector') {
+        $stmt = $pdo->prepare("
+            SELECT c.*, u.full_name as collector_name,
+                   sc.id as card_id, sc.card_number, sc.daily_amount, sc.spaces_filled, sc.total_spaces, sc.total_saved, sc.status as card_status
+            FROM customers c
+            LEFT JOIN users u ON c.assigned_collector_id = u.id
+            LEFT JOIN susu_cards sc ON c.id = sc.customer_id AND sc.status = 'active'
+            WHERE c.assigned_collector_id = ? AND c.is_active = 1
+            ORDER BY c.full_name ASC
+        ");
+        $stmt->execute([$user['id']]);
+    } else {
+        // Admin sees all customers
+        $stmt = $pdo->query("
+            SELECT c.*, u.full_name as collector_name,
+                   sc.id as card_id, sc.card_number, sc.daily_amount, sc.spaces_filled, sc.total_spaces, sc.total_saved, sc.status as card_status
+            FROM customers c
+            LEFT JOIN users u ON c.assigned_collector_id = u.id
+            LEFT JOIN susu_cards sc ON c.id = sc.customer_id AND sc.status = 'active'
+            WHERE c.is_active = 1
+            ORDER BY c.full_name ASC
+        ");
+    }
 }
 
 $allCustomers = $stmt->fetchAll();
@@ -125,18 +157,40 @@ require_once __DIR__ . '/includes/header.php';
     <div class="bg-white rounded-2xl border border-silver-600 shadow-sm overflow-hidden">
         
         <div class="p-4 sm:p-5 border-b border-silver-600/70 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div class="w-full sm:max-w-md relative">
-                <input type="text" id="customer_search" placeholder="Search by name, account number, or location..."
-                       class="w-full pl-9 pr-4 py-2.5 text-xs sm:text-sm rounded-xl border border-silver-600 focus:border-steel_azure focus:ring-2 focus:ring-cornflower_ocean-800 outline-none transition">
+            <form method="GET" action="customers.php" class="w-full sm:max-w-md relative" id="customer_search_form">
+                <input type="text" id="customer_search" name="search" value="<?= htmlspecialchars($searchQuery) ?>" 
+                       autocomplete="off"
+                       placeholder="Search name, account, phone, location... (Press /)"
+                       class="w-full pl-9 pr-16 py-2.5 text-xs sm:text-sm rounded-xl border border-silver-600 focus:border-steel_azure focus:ring-2 focus:ring-cornflower_ocean-800 outline-none transition">
                 <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-            </div>
+                
+                <div class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                    <i id="search_spinner" class="fa-solid fa-circle-notch fa-spin text-pumpkin_spice text-xs hidden"></i>
+                    <button type="button" id="search_clear_btn" class="<?= empty($searchQuery) ? 'hidden' : '' ?> text-slate-400 hover:text-slate-700 text-xs p-1" title="Clear search">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                    <span class="hidden sm:inline-block text-[10px] font-mono text-slate-400 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded">/</span>
+                </div>
+            </form>
             <div class="flex items-center gap-2 text-xs font-semibold text-slate-600">
                 <span>Total Registered:</span>
-                <span class="px-2.5 py-0.5 rounded-full bg-steel_azure text-white font-extrabold text-xs">
+                <span class="px-2.5 py-0.5 rounded-full bg-steel_azure text-white font-extrabold text-xs" id="total_customers_count">
                     <?= $pagedData['total'] ?> clients
                 </span>
             </div>
         </div>
+
+        <?php if (!empty($searchQuery)): ?>
+            <div id="search_filter_banner" class="px-4 py-2 bg-blue-50/70 border-b border-blue-100 flex items-center justify-between text-xs">
+                <span class="text-steel_azure font-semibold">
+                    Search results for <strong class="text-slate-800">"<?= htmlspecialchars($searchQuery) ?>"</strong> (<?= $pagedData['total'] ?> found)
+                </span>
+                <a href="customers.php" class="text-pumpkin_spice hover:underline font-bold inline-flex items-center gap-1">
+                    <i class="fa-solid fa-xmark text-xs"></i>
+                    <span>Reset Full Directory</span>
+                </a>
+            </div>
+        <?php endif; ?>
 
         <div id="search_empty_notice" class="hidden py-10">
             <div class="empty-state">
@@ -161,7 +215,7 @@ require_once __DIR__ . '/includes/header.php';
                         <th class="py-3 px-4 text-right">Actions</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-silver-600/50">
+                <tbody class="divide-y divide-silver-600/50" id="customers_table_body">
                     <?php if (empty($customers)): ?>
                         <tr>
                             <td colspan="6" class="text-center">
@@ -278,7 +332,7 @@ require_once __DIR__ . '/includes/header.php';
         </div>
 
         <!-- Mobile Customer Cards (Gestalt Similarity & Fitts's Law touch buttons) -->
-        <div class="md:hidden divide-y divide-silver-600/50">
+        <div class="md:hidden divide-y divide-silver-600/50" id="customers_mobile_container">
             <?php foreach ($customers as $c): ?>
                 <div class="customer-row p-4"
                      data-search="<?= htmlspecialchars($c['full_name'] . ' ' . $c['account_number'] . ' ' . $c['phone'] . ' ' . $c['location'] . ' ' . $c['collector_name']) ?>">
@@ -353,11 +407,19 @@ require_once __DIR__ . '/includes/header.php';
         </div>
 
         <!-- Pagination Controls -->
-        <?= render_pagination($pagedData['total'], $pagedData['per_page'], $pagedData['current']) ?>
+        <div id="customers_pagination_container">
+            <?= render_pagination($pagedData['total'], $pagedData['per_page'], $pagedData['current']) ?>
+        </div>
 
     </div>
 
 </div>
+
+<script>
+window.eyramConfig = {
+    userRole: <?= json_encode($user['role']) ?>
+};
+</script>
 
 <?php if ($user['role'] === 'admin'): ?>
 <!-- Edit Customer & Daily Plan Modal -->
