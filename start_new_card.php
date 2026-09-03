@@ -8,6 +8,7 @@ require_admin();
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $customerId = (int)($_POST['customer_id'] ?? 0);
     $dailyAmount = (float)($_POST['daily_amount'] ?? 0);
+    $redirectTo = trim($_POST['redirect_to'] ?? '');
 
     if ($customerId > 0 && $dailyAmount > 0) {
         $pdo = get_db_connection();
@@ -25,8 +26,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmtInsert->execute([$customerId, $nextCardNum, $dailyAmount]);
         $newCardId = $pdo->lastInsertId();
 
-        set_flash_message('success', "New Susu Card #{$nextCardNum} opened successfully!");
-        header("Location: view_card.php?id={$newCardId}");
+        set_flash_message('success', "New 31-Space Susu Card #{$nextCardNum} opened successfully!");
+        if (!empty($redirectTo)) {
+            header("Location: " . $redirectTo);
+        } else {
+            header("Location: view_card.php?id={$newCardId}");
+        }
         exit;
     }
 }

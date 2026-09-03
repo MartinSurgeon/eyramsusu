@@ -315,16 +315,102 @@ require_once __DIR__ . '/includes/header.php';
                     </div>
                 </div>
 
-            </div>
         </div>
 
         <?php if ($activeCustomer): ?>
             <?php if (!$activeCustomer['card_id']): ?>
-                <div class="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
-                    ⚠️ This customer does not currently have an active Susu Card.
+                <!-- No Active Card Section (HCI: Hick's Law, Fitts's Law, Plain Language) -->
+                <div class="rounded-2xl border-2 border-amber-300 bg-amber-50/70 p-5 sm:p-6 space-y-4">
+                    
+                    <div class="flex items-start gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center flex-shrink-0 text-lg">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-black text-sm sm:text-base text-slate-800">
+                                Active Card Required for <?= htmlspecialchars($activeCustomer['full_name']) ?>
+                            </h4>
+                            <p class="text-xs text-slate-600 mt-0.5 leading-relaxed">
+                                Deposits cannot be stamped because this customer does not currently have an active 31-space Susu card.
+                            </p>
+                        </div>
+                    </div>
+
                     <?php if ($user['role'] === 'admin'): ?>
-                        <a href="customers.php" class="font-bold underline ml-1">Open a new card here &rarr;</a>
+                        <!-- Admin Action Box: Instant 1-Click Card Opener (Hick's Law: 1 Obvious Primary Action) -->
+                        <div class="bg-white p-4 sm:p-5 rounded-xl border border-amber-200 shadow-xs space-y-3">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-black text-slate-700 uppercase tracking-wider">
+                                    Open New 31-Space Card
+                                </span>
+                                <span class="text-[11px] text-slate-400 font-medium">31 spaces &bull; Card Cycle</span>
+                            </div>
+
+                            <div class="space-y-3">
+                                <input type="hidden" name="redirect_to" value="record_deposit.php?customer_id=<?= $activeCustomer['id'] ?>">
+
+                                <div>
+                                    <label for="new_card_daily_amount" class="block text-xs font-bold text-slate-700 mb-1">
+                                        Agreed Daily Savings Rate (GH₵) *
+                                    </label>
+                                    <div class="relative">
+                                        <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-500 font-black text-sm">GH₵</span>
+                                        <input type="number" step="1" min="1" id="new_card_daily_amount" name="daily_amount"
+                                               class="w-full pl-12 pr-4 py-2.5 rounded-xl border-2 border-silver-600 focus:border-pumpkin_spice outline-none text-base font-black text-slate-800 transition"
+                                               placeholder="e.g. 20.00" value="20.00">
+                                    </div>
+                                    <p class="text-[11px] text-slate-500 mt-1">Amount the customer agrees to deposit for each space.</p>
+                                </div>
+
+                                <button type="submit" 
+                                        formaction="start_new_card.php" formmethod="POST"
+                                        class="w-full btn-touch bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs sm:text-sm py-3 rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer">
+                                    <i class="fa-solid fa-plus-circle text-sm"></i>
+                                    <span>Open Card & Continue Deposit</span>
+                                </button>
+                            </div>
+                        </div>
+
+                    <?php else: ?>
+                        <!-- Collector Action Box: Alert Admin via In-App Notification or 1-Tap WhatsApp -->
+                        <?php
+                            $stmtAdmin = $pdo->query("SELECT phone, full_name FROM users WHERE role = 'admin' AND is_active = 1 LIMIT 1");
+                            $adminUser = $stmtAdmin ? $stmtAdmin->fetch() : null;
+                            $adminPhone = $adminUser ? $adminUser['phone'] : '0553224837';
+                            $cleanPhone = preg_replace('/^0/', '233', preg_replace('/\D/', '', $adminPhone));
+                            $waText = urlencode("Hello " . ($adminUser['full_name'] ?? 'Admin') . ", customer {$activeCustomer['full_name']} (#{$activeCustomer['account_number']}) needs a new Susu Card opened so I can record their deposit.");
+                            $waUrl = "https://wa.me/{$cleanPhone}?text={$waText}";
+                        ?>
+
+                        <div class="bg-white p-4 sm:p-5 rounded-xl border border-amber-200 shadow-xs space-y-3">
+                            <p class="text-xs font-semibold text-slate-700">
+                                As a field collector, you cannot issue cards directly. Alert the office administrator to open a new card:
+                            </p>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                                <!-- In-App Alert Button (Fitts's Law: Large Thumb Target) -->
+                                <button type="button" id="alert_admin_btn" onclick="sendAdminCardAlert(<?= $activeCustomer['id'] ?>)"
+                                        class="btn-touch bg-steel_azure hover:bg-steel_azure-400 text-white font-bold text-xs py-3 px-3 rounded-xl shadow-xs transition flex items-center justify-center gap-2">
+                                    <i class="fa-solid fa-bell text-xs"></i>
+                                    <span id="alert_admin_btn_text">Alert Admin to Open Card</span>
+                                </button>
+
+                                <!-- 1-Tap WhatsApp to Admin (Familiar Pattern / Jakob's Law) -->
+                                <a href="<?= $waUrl ?>" target="_blank" rel="noopener noreferrer"
+                                   class="btn-touch bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-3 px-3 rounded-xl shadow-xs transition flex items-center justify-center gap-2">
+                                    <i class="fa-brands fa-whatsapp text-sm"></i>
+                                    <span>WhatsApp Admin (<?= htmlspecialchars($adminPhone) ?>)</span>
+                                </a>
+                            </div>
+
+                            <div id="alert_feedback_msg" class="hidden text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 p-2.5 rounded-xl flex items-center gap-2">
+                                <i class="fa-solid fa-circle-check text-emerald-600 text-sm"></i>
+                                <span>Notification sent! The office administrator has been alerted to open this card.</span>
+                            </div>
+                        </div>
+
                     <?php endif; ?>
+
                 </div>
             <?php else: ?>
 
@@ -538,6 +624,43 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+function sendAdminCardAlert(customerId) {
+    const btn = document.getElementById('alert_admin_btn');
+    const btnText = document.getElementById('alert_admin_btn_text');
+    const feedback = document.getElementById('alert_feedback_msg');
+
+    if (!btn || !customerId) return;
+
+    btn.disabled = true;
+    if (btnText) btnText.textContent = 'Sending alert...';
+
+    const formData = new FormData();
+    formData.append('action', 'alert_admin_card');
+    formData.append('customer_id', customerId);
+
+    fetch('api_notifications.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            btn.className = 'btn-touch bg-emerald-600 text-white font-bold text-xs py-3 px-3 rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-default';
+            if (btnText) btnText.innerHTML = '<i class="fa-solid fa-check"></i> Admin Alerted';
+            if (feedback) feedback.classList.remove('hidden');
+        } else {
+            btn.disabled = false;
+            if (btnText) btnText.textContent = 'Alert Admin to Open Card';
+            alert(data.error || 'Could not send alert. Please try WhatsApp.');
+        }
+    })
+    .catch(err => {
+        btn.disabled = false;
+        if (btnText) btnText.textContent = 'Alert Admin to Open Card';
+        alert('Network error. Please use the WhatsApp button to alert admin.');
+    });
+}
 </script>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

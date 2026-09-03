@@ -29,6 +29,27 @@ if ($action === 'mark_read') {
     $unreadCount = get_unread_notification_count($user['id'], $user['role']);
     echo json_encode(['success' => true, 'unread_count' => $unreadCount]);
     exit;
+} elseif ($action === 'alert_admin_card') {
+    $customerId = (int)($_POST['customer_id'] ?? 0);
+    if ($customerId > 0) {
+        $pdo = get_db_connection();
+        $stmtCust = $pdo->prepare("SELECT full_name, account_number FROM customers WHERE id = ?");
+        $stmtCust->execute([$customerId]);
+        $cust = $stmtCust->fetch();
+        if ($cust) {
+            create_notification(
+                null, // visible to all admins
+                'warning',
+                "New Card Needed: " . $cust['full_name'],
+                "Collector " . $user['full_name'] . " is with " . $cust['full_name'] . " (#" . $cust['account_number'] . ") who needs a new Susu Card.",
+                "record_deposit.php?customer_id=" . $customerId
+            );
+            echo json_encode(['success' => true, 'message' => 'Admin alerted successfully!']);
+            exit;
+        }
+    }
+    echo json_encode(['success' => false, 'error' => 'Customer not found.']);
+    exit;
 }
 
 echo json_encode(['success' => false, 'error' => 'Invalid action']);
