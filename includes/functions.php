@@ -130,6 +130,132 @@ function get_collector_cash_in_hand($collector_id) {
 }
 
 /**
+ * Reverse/Undo a deposit transaction made today before handover
+ *
+ * @param int $depositId ID of the deposit (or any space in the transaction batch)
+ * @param string $reason Reason for cancellation
+ * @param int $userId ID of user performing reversal
+ * @param string $userRole 'admin' or 'collector'
+ * @return array ['success' => bool, 'message' => string, 'amount' => float, 'spaces' => int, 'customer_id' => int]
+ */
+function reverse_deposit($depositId, $reason, $userId, $userRole = 'collector') {
+    $pdo = get_db_connection();
+    
+    // 1. Fetch deposit details
+    $stmt = $pdo->prepare("
+        SELECT d.*, c.full_name as customer_name, c.account_number, u.full_name as collector_name,
+               sc.spaces_filled, sc.total_saved, sc.status as card_status
+        FROM deposits d
+        JOIN customers c ON d.customer_id = c.id
+        JOIN users u ON d.collector_id = u.id
+        JOIN susu_cards sc ON d.card_id = sc.id
+        WHERE d.id = ?
+    ");
+    $stmt->execute([(int)$depositId]);
+    $deposit = $stmt->fetch();
+
+    if (!$deposit) {
+        return ['success' => false, 'message' => 'Deposit record not found.'];
+    }
+
+    // 2. Permission check: collectors can only cancel their own deposits
+    if ($userRole !== 'admin' && (int)$deposit['collector_id'] !== (int)$userId) {
+        return ['success' => false, 'message' => 'You can only cancel your own collections.'];
+    }
+
+    // 3. Handover check: cannot reverse deposits already handed over to admin
+    if (!empty($deposit['handover_id'])) {
+        return ['success' => false, 'message' => 'Cannot cancel: this deposit has already been handed over to the office.'];
+    }
+
+    // 4. Date check: can only cancel same-day deposits
+    if ($deposit['deposit_date'] !== date('Y-m-d')) {
+        return ['success' => false, 'message' => 'Cannot cancel: only collections from today can be undone.'];
+    }
+
+    try {
+        $pdo->beginTransaction();
+
+        // 5. Find all spaces recorded in this exact deposit batch (same card, collector, and created within 3 seconds)
+        $batchStmt = $pdo->prepare("
+            SELECT id, amount, space_number 
+            FROM deposits 
+            WHERE card_id = ? AND collector_id = ? 
+              AND deposit_date = ? 
+              AND handover_id IS NULL
+              AND ABS(TIMESTAMPDIFF(SECOND, created_at, ?)) <= 3
+            ORDER BY space_number DESC
+        ");
+        $batchStmt->execute([
+            $deposit['card_id'],
+            $deposit['collector_id'],
+            $deposit['deposit_date'],
+            $deposit['created_at']
+        ]);
+        $batchItems = $batchStmt->fetchAll();
+
+        if (empty($batchItems)) {
+            $batchItems = [['id' => $deposit['id'], 'amount' => $deposit['amount'], 'space_number' => $deposit['space_number']]];
+        }
+
+        $totalReversedMoney = 0.0;
+        $totalSpacesCount = count($batchItems);
+        $depositIdsToDelete = [];
+
+        foreach ($batchItems as $item) {
+            $totalReversedMoney += (float)$item['amount'];
+            $depositIdsToDelete[] = (int)$item['id'];
+        }
+
+        // 6. Delete deposit entries
+        $inPlaceholders = implode(',', array_fill(0, count($depositIdsToDelete), '?'));
+        $delStmt = $pdo->prepare("DELETE FROM deposits WHERE id IN ($inPlaceholders)");
+        $delStmt->execute($depositIdsToDelete);
+
+        // 7. Update active card
+        $newSpacesFilled = max(0, (int)$deposit['spaces_filled'] - $totalSpacesCount);
+        $newTotalSaved = max(0.0, (float)$deposit['total_saved'] - $totalReversedMoney);
+        
+        $cardUpd = $pdo->prepare("
+            UPDATE susu_cards 
+            SET spaces_filled = ?, total_saved = ?, status = 'active'
+            WHERE id = ?
+        ");
+        $cardUpd->execute([$newSpacesFilled, $newTotalSaved, $deposit['card_id']]);
+
+        // 8. Dispatch In-App Notification to Admin
+        $cleanReason = trim($reason) ?: 'Customer changed mind';
+        $spacesText = $totalSpacesCount === 1 ? '1 space' : "{$totalSpacesCount} spaces";
+        $adminMsg = "Collector {$deposit['collector_name']} cancelled deposit of " . format_money($totalReversedMoney) . " ({$spacesText}) for {$deposit['customer_name']} (#{$deposit['account_number']}). Reason: {$cleanReason}.";
+        
+        create_notification(
+            null, // visible to all admins
+            'warning',
+            "Deposit Cancelled: {$deposit['customer_name']}",
+            $adminMsg,
+            "view_card.php?id={$deposit['card_id']}"
+        );
+
+        $pdo->commit();
+
+        return [
+            'success' => true,
+            'message' => "Deposit of " . format_money($totalReversedMoney) . " cancelled successfully. You can now record the correct amount.",
+            'amount' => $totalReversedMoney,
+            'spaces' => $totalSpacesCount,
+            'customer_id' => (int)$deposit['customer_id'],
+            'card_id' => (int)$deposit['card_id']
+        ];
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        error_log("Deposit reversal error: " . $e->getMessage());
+        return ['success' => false, 'message' => 'Could not cancel deposit. Please try again.'];
+    }
+}
+
+/**
  * Get active Susu Card for a customer
  */
 function get_active_card_for_customer($customer_id) {

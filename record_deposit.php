@@ -53,8 +53,37 @@ if ($selectedCustomerId > 0) {
     }
 }
 
+// Fetch any un-handed-over deposits recorded today for this active card
+$cardTodayDeposits = [];
+if ($activeCustomer && !empty($activeCustomer['card_id'])) {
+    $stmtToday = $pdo->prepare("
+        SELECT d.*, u.full_name as collector_name 
+        FROM deposits d 
+        JOIN users u ON d.collector_id = u.id 
+        WHERE d.card_id = ? AND d.deposit_date = CURRENT_DATE() AND d.handover_id IS NULL
+        ORDER BY d.space_number DESC
+    ");
+    $stmtToday->execute([$activeCustomer['card_id']]);
+    $cardTodayDeposits = $stmtToday->fetchAll();
+}
+
+// Handle Undo / Cancel Deposit POST Request
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'undo_deposit') {
+    $depositId = (int)($_POST['deposit_id'] ?? 0);
+    $reason = trim($_POST['reason'] ?? 'Customer changed mind');
+
+    $res = reverse_deposit($depositId, $reason, $user['id'], $user['role']);
+    if ($res['success']) {
+        set_flash_message('success', $res['message']);
+        header("Location: record_deposit.php?customer_id=" . $res['customer_id']);
+        exit;
+    } else {
+        $error = $res['message'];
+    }
+}
+
 // Handle Form Submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!isset($_POST['action']) || $_POST['action'] !== 'undo_deposit')) {
     $customerId = (int)($_POST['customer_id'] ?? 0);
     $cashPaid = (float)($_POST['cash_paid'] ?? 0);
     $depositDate = !empty($_POST['deposit_date']) ? $_POST['deposit_date'] : date('Y-m-d');
@@ -445,6 +474,48 @@ require_once __DIR__ . '/includes/header.php';
                     </div>
                 </div>
 
+                <?php if (!empty($cardTodayDeposits)): ?>
+                    <!-- Today's Stamped Spaces on this Card (HCI: Fitts's Law Undo Action) -->
+                    <div class="bg-amber-50/70 border border-amber-200/90 rounded-2xl p-3.5 sm:p-4 space-y-2.5 shadow-2xs">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-black uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
+                                <i class="fa-solid fa-clock-rotate-left text-xs text-amber-600"></i>
+                                Today's Stamped Spaces (<?= count($cardTodayDeposits) ?>)
+                            </span>
+                            <span class="text-[11px] text-amber-700 font-semibold">Unsettled Cash</span>
+                        </div>
+
+                        <div class="space-y-2">
+                            <?php foreach ($cardTodayDeposits as $depItem): ?>
+                                <div class="bg-white p-3 rounded-xl border border-amber-200/80 flex items-center justify-between gap-3 shadow-2xs">
+                                    <div class="flex items-center gap-2.5">
+                                        <span class="w-7 h-7 rounded-xl bg-emerald-100 text-emerald-800 font-black text-xs flex items-center justify-center font-heading">
+                                            #<?= $depItem['space_number'] ?>
+                                        </span>
+                                        <div>
+                                            <div class="font-extrabold text-xs text-slate-800">
+                                                <?= format_money($depItem['amount']) ?>
+                                            </div>
+                                            <div class="text-[10px] text-slate-400">
+                                                <?= date('h:i A', strtotime($depItem['created_at'])) ?> &bull; <?= htmlspecialchars($depItem['collector_name']) ?>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <?php if ($user['role'] === 'admin' || (int)$depItem['collector_id'] === (int)$user['id']): ?>
+                                        <button type="button" 
+                                                onclick="openCancelDepositModal(<?= $depItem['id'] ?>, '<?= htmlspecialchars(addslashes($activeCustomer['full_name'])) ?>', '<?= format_money($depItem['amount']) ?>', <?= $depItem['space_number'] ?>)"
+                                                class="btn-touch px-3 py-1.5 bg-red-50 hover:bg-red-600 hover:text-white text-red-700 border border-red-200 rounded-xl text-xs font-bold transition inline-flex items-center gap-1 cursor-pointer">
+                                            <i class="fa-solid fa-rotate-left text-[11px]"></i>
+                                            <span>Cancel / Undo</span>
+                                        </button>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
                 <!-- Hidden calculation fields for JS -->
                 <input type="hidden" id="daily_amount" value="<?= $activeCustomer['daily_amount'] ?>">
                 <input type="hidden" id="current_change" value="<?= $activeCustomer['change_balance'] ?>">
@@ -661,6 +732,149 @@ function sendAdminCardAlert(customerId) {
         alert('Network error. Please use the WhatsApp button to alert admin.');
     });
 }
+
+function openCancelDepositModal(depositId, customerName, amount, spaceNumber) {
+    document.getElementById('cancel_deposit_id').value = depositId;
+    document.getElementById('cancel_customer_name').textContent = customerName;
+    document.getElementById('cancel_amount_display').textContent = amount;
+    document.getElementById('cancel_space_display').textContent = 'Space #' + spaceNumber;
+    
+    // Reset reason to default
+    selectCancelReason('Customer changed mind', document.querySelector('.reason-btn'));
+
+    const modal = document.getElementById('cancel_deposit_modal');
+    const box = document.getElementById('cancel_modal_box');
+    if (modal && modal.parentElement !== document.body) {
+        document.body.appendChild(modal);
+    }
+    modal.classList.remove('hidden');
+    setTimeout(() => {
+        box.classList.remove('scale-95');
+        box.classList.add('scale-100');
+    }, 10);
+}
+
+function closeCancelDepositModal() {
+    const modal = document.getElementById('cancel_deposit_modal');
+    const box = document.getElementById('cancel_modal_box');
+    if (!modal) return;
+    box.classList.remove('scale-100');
+    box.classList.add('scale-95');
+    setTimeout(() => {
+        modal.classList.add('hidden');
+    }, 150);
+}
+
+function selectCancelReason(reason, btn) {
+    document.getElementById('cancel_reason_input').value = reason;
+    document.querySelectorAll('.reason-btn').forEach(b => {
+        b.className = 'reason-btn w-full p-2.5 rounded-xl border-2 border-silver-600 bg-white text-slate-700 font-semibold text-xs text-left hover:bg-platinum-800 transition flex items-center justify-between cursor-pointer';
+        const icon = b.querySelector('.check-icon');
+        if (icon) icon.classList.add('hidden');
+    });
+    if (btn) {
+        btn.className = 'reason-btn w-full p-2.5 rounded-xl border-2 border-red-500 bg-red-50 text-red-800 font-bold text-xs text-left transition flex items-center justify-between cursor-pointer';
+        const icon = btn.querySelector('.check-icon');
+        if (icon) icon.classList.remove('hidden');
+    }
+}
+
+// Close on Escape or outside click
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeCancelDepositModal();
+    }
+});
+
+document.addEventListener('click', function(e) {
+    const modal = document.getElementById('cancel_deposit_modal');
+    if (modal && !modal.classList.contains('hidden') && e.target === modal) {
+        closeCancelDepositModal();
+    }
+});
 </script>
+
+<!-- Cancel Deposit Confirmation Modal (HCI: Hick's Law, Fitts's Law, Plain Language) -->
+<div id="cancel_deposit_modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs hidden transition-opacity">
+    <div class="bg-white rounded-2xl border border-silver-600 shadow-2xl max-w-md w-full overflow-hidden transform transition-all scale-95 duration-200" id="cancel_modal_box">
+        
+        <!-- Modal Header -->
+        <div class="p-4 sm:p-5 bg-gradient-to-r from-red-600 to-rose-600 text-white flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+                <i class="fa-solid fa-rotate-left text-base"></i>
+                <h3 class="font-extrabold text-base">Cancel Susu Deposit</h3>
+            </div>
+            <button type="button" onclick="closeCancelDepositModal()" class="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition cursor-pointer" title="Close">
+                <i class="fa-solid fa-xmark text-sm"></i>
+            </button>
+        </div>
+
+        <form method="POST" action="record_deposit.php" class="p-5 sm:p-6 space-y-4">
+            <input type="hidden" name="action" value="undo_deposit">
+            <input type="hidden" id="cancel_deposit_id" name="deposit_id" value="">
+            <input type="hidden" id="cancel_reason_input" name="reason" value="Customer changed mind">
+
+            <!-- Confirmation Review Box -->
+            <div class="p-3.5 bg-red-50 border border-red-200 rounded-xl space-y-1.5 text-xs text-red-900">
+                <div class="font-bold flex items-center gap-1.5 text-red-800">
+                    <i class="fa-solid fa-triangle-exclamation text-red-600"></i>
+                    <span>This action will un-stamp the space and adjust balances:</span>
+                </div>
+                <div class="pt-1.5 border-t border-red-200/80 space-y-1">
+                    <div class="flex justify-between">
+                        <span class="text-slate-600">Client:</span>
+                        <strong class="text-slate-800" id="cancel_customer_name">-</strong>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-600">Cash to Return:</span>
+                        <strong class="text-red-700 text-sm" id="cancel_amount_display">-</strong>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-600">Space to Remove:</span>
+                        <strong class="text-slate-800" id="cancel_space_display">-</strong>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick 1-Tap Reason Selector (Fitts's Law: Large Thumb Targets) -->
+            <div>
+                <label class="block text-xs font-bold text-slate-700 mb-2">
+                    Select Reason for Cancellation:
+                </label>
+                <div class="space-y-2">
+                    <button type="button" onclick="selectCancelReason('Customer changed mind', this)"
+                            class="reason-btn w-full p-2.5 rounded-xl border-2 border-red-500 bg-red-50 text-red-800 font-bold text-xs text-left transition flex items-center justify-between cursor-pointer">
+                        <span>Customer changed mind</span>
+                        <i class="fa-solid fa-check text-xs text-red-600 check-icon"></i>
+                    </button>
+                    <button type="button" onclick="selectCancelReason('Wrong amount entered', this)"
+                            class="reason-btn w-full p-2.5 rounded-xl border-2 border-silver-600 bg-white text-slate-700 font-semibold text-xs text-left hover:bg-platinum-800 transition flex items-center justify-between cursor-pointer">
+                        <span>Wrong amount entered</span>
+                        <i class="fa-solid fa-check text-xs text-red-600 check-icon hidden"></i>
+                    </button>
+                    <button type="button" onclick="selectCancelReason('Customer requested cash back', this)"
+                            class="reason-btn w-full p-2.5 rounded-xl border-2 border-silver-600 bg-white text-slate-700 font-semibold text-xs text-left hover:bg-platinum-800 transition flex items-center justify-between cursor-pointer">
+                        <span>Customer requested cash back</span>
+                        <i class="fa-solid fa-check text-xs text-red-600 check-icon hidden"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal Action Buttons (Hick's Law: 1 Primary CTA + 1 Secondary CTA) -->
+            <div class="pt-3 border-t border-silver-600/60 flex items-center justify-between gap-3">
+                <button type="button" onclick="closeCancelDepositModal()"
+                        class="btn-touch px-4 py-2.5 bg-white hover:bg-platinum text-slate-600 border border-silver-600 text-xs font-bold rounded-xl transition cursor-pointer">
+                    Keep Deposit
+                </button>
+                <button type="submit"
+                        class="btn-touch px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-extrabold rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer">
+                    <i class="fa-solid fa-rotate-left text-xs"></i>
+                    <span>Yes, Cancel Deposit</span>
+                </button>
+            </div>
+        </form>
+
+    </div>
+</div>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
