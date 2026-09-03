@@ -49,29 +49,64 @@ function initDepositCalculator() {
         const spacesFilled = parseInt(spacesFilledEl ? spacesFilledEl.value : 0) || 0;
         const totalSpaces = parseInt(totalSpacesEl ? totalSpacesEl.value : 31) || 31;
         const cashPaid = parseFloat(cashInput.value) || 0;
+        const remainderNotice = document.getElementById('remainder_error_msg');
+        const remainderText = document.getElementById('remainder_error_text');
+        const submitBtn = document.querySelector('form button[type="submit"]');
 
         if (dailyAmount <= 0 || cashPaid <= 0) {
             if (previewContainer) previewContainer.classList.add('hidden');
+            if (remainderNotice) remainderNotice.classList.add('hidden');
+            if (submitBtn) submitBtn.disabled = false;
             return;
         }
 
-        const totalPool = cashPaid + currentChange;
-        const spacesCanFill = Math.floor(totalPool / dailyAmount);
-        const spacesRemaining = Math.max(0, totalSpaces - spacesFilled);
-        const spacesToFill = Math.min(spacesCanFill, spacesRemaining);
-        const moneyApplied = spacesToFill * dailyAmount;
-        const newChange = Math.max(0, totalPool - moneyApplied);
+        // Strict zero-remainder check
+        const remainder = Math.round((cashPaid % dailyAmount) * 100) / 100;
+        const isDivisible = (remainder < 0.01 || Math.abs(remainder - dailyAmount) < 0.01);
 
+        if (!isDivisible) {
+            const lowerMultiple = Math.floor(cashPaid / dailyAmount) * dailyAmount;
+            const upperMultiple = Math.ceil(cashPaid / dailyAmount) * dailyAmount;
+            if (remainderNotice && remainderText) {
+                remainderNotice.classList.remove('hidden');
+                if (lowerMultiple > 0) {
+                    remainderText.textContent = `Please enter GH₵ ${lowerMultiple.toFixed(2)} or GH₵ ${upperMultiple.toFixed(2)}.`;
+                } else {
+                    remainderText.textContent = `Please enter at least GH₵ ${upperMultiple.toFixed(2)}.`;
+                }
+            }
+            if (previewContainer) previewContainer.classList.add('hidden');
+            if (submitBtn) submitBtn.disabled = true;
+            return;
+        }
+
+        const spacesRemaining = Math.max(0, totalSpaces - spacesFilled);
+        const spacesToFill = Math.round(cashPaid / dailyAmount);
+
+        if (spacesToFill > spacesRemaining) {
+            const maxAllowed = (spacesRemaining * dailyAmount).toFixed(2);
+            if (remainderNotice && remainderText) {
+                remainderNotice.classList.remove('hidden');
+                remainderText.textContent = `Only ${spacesRemaining} space(s) left on this card. Maximum allowed is GH₵ ${maxAllowed}.`;
+            }
+            if (previewContainer) previewContainer.classList.add('hidden');
+            if (submitBtn) submitBtn.disabled = true;
+            return;
+        }
+
+        // All checks pass
+        if (remainderNotice) remainderNotice.classList.add('hidden');
+        if (submitBtn) submitBtn.disabled = false;
         if (previewContainer) previewContainer.classList.remove('hidden');
+
+        const moneyApplied = spacesToFill * dailyAmount;
+        const newChange = currentChange;
 
         if (previewSpaces) {
             previewSpaces.textContent = spacesToFill + (spacesToFill === 1 ? ' space' : ' spaces');
-            // Color-coded status badge
             previewSpaces.className = 'px-2 py-0.5 rounded text-[11px] font-black ';
             if (spacesFilled + spacesToFill >= totalSpaces) {
                 previewSpaces.className += 'bg-emerald-600 text-white'; // Card completes
-            } else if (spacesToFill === 0) {
-                previewSpaces.className += 'bg-amber-500 text-white'; // Partial - goes to change
             } else {
                 previewSpaces.className += 'bg-steel_azure text-white'; // Normal
             }
@@ -82,8 +117,6 @@ function initDepositCalculator() {
                 const start = spacesFilled + 1;
                 const end = spacesFilled + spacesToFill;
                 previewRange.textContent = start === end ? `(Space #${start})` : `(Spaces #${start} to #${end})`;
-            } else {
-                previewRange.textContent = '(Insufficient for a full space)';
             }
         }
 
@@ -100,10 +133,6 @@ function initDepositCalculator() {
                 previewAlert.classList.remove('hidden');
                 previewAlert.className = 'text-xs font-bold text-emerald-800 bg-emerald-100 p-2 rounded-lg mt-1';
                 previewAlert.textContent = '🎉 This deposit will complete all 31 spaces on this Susu Card!';
-            } else if (spacesToFill === 0) {
-                previewAlert.classList.remove('hidden');
-                previewAlert.className = 'text-xs font-bold text-amber-800 bg-amber-100 p-2 rounded-lg mt-1';
-                previewAlert.textContent = 'ℹ️ Note: Amount will be saved as Customer Change towards the next space.';
             } else {
                 previewAlert.classList.add('hidden');
             }
@@ -121,13 +150,12 @@ function initDepositCalculator() {
             const dailyAmount = parseFloat(dailyAmountEl ? dailyAmountEl.value : 0) || 0;
             if (dailyAmount > 0) {
                 cashInput.value = (dailyAmount * multiplier).toFixed(2);
-                // Visual feedback on selected preset
                 document.querySelectorAll('.preset-btn').forEach(b => {
-                    b.classList.remove('border-pumpkin_spice', 'bg-pumpkin_spice-900', 'text-pumpkin_spice');
-                    b.classList.add('border-silver-600');
+                    b.classList.remove('border-pumpkin_spice', 'bg-orange-50', 'text-pumpkin_spice');
+                    b.classList.add('border-silver-600', 'bg-white', 'text-slate-700');
                 });
-                btn.classList.add('border-pumpkin_spice', 'bg-pumpkin_spice-900', 'text-pumpkin_spice');
-                btn.classList.remove('border-silver-600');
+                btn.classList.add('border-pumpkin_spice', 'bg-orange-50', 'text-pumpkin_spice');
+                btn.classList.remove('border-silver-600', 'bg-white', 'text-slate-700');
                 updatePreview();
             }
         });

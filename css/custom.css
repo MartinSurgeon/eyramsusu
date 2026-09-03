@@ -28,7 +28,11 @@ body {
     letter-spacing: -0.01em;
 }
 
-h1, h2, h3, h4, .font-heading {
+h1,
+h2,
+h3,
+h4,
+.font-heading {
     font-family: 'Outfit', 'Inter', sans-serif;
     letter-spacing: -0.02em;
 }
@@ -207,6 +211,7 @@ textarea:focus-visible {
         opacity: 0;
         transform: translateY(12px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -218,10 +223,21 @@ textarea:focus-visible {
 }
 
 /* Stagger children */
-.page-enter > *:nth-child(1) { animation-delay: 0.03s; }
-.page-enter > *:nth-child(2) { animation-delay: 0.06s; }
-.page-enter > *:nth-child(3) { animation-delay: 0.09s; }
-.page-enter > *:nth-child(4) { animation-delay: 0.12s; }
+.page-enter>*:nth-child(1) {
+    animation-delay: 0.03s;
+}
+
+.page-enter>*:nth-child(2) {
+    animation-delay: 0.06s;
+}
+
+.page-enter>*:nth-child(3) {
+    animation-delay: 0.09s;
+}
+
+.page-enter>*:nth-child(4) {
+    animation-delay: 0.12s;
+}
 
 /* ============================================================
    FORM VALIDATION STATES (Show Clear Error/Success States)
@@ -249,11 +265,27 @@ textarea:focus-visible {
 
 /* Shake animation for invalid submit */
 @keyframes shake {
-    0%, 100% { transform: translateX(0); }
-    20% { transform: translateX(-6px); }
-    40% { transform: translateX(6px); }
-    60% { transform: translateX(-4px); }
-    80% { transform: translateX(4px); }
+
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+
+    20% {
+        transform: translateX(-6px);
+    }
+
+    40% {
+        transform: translateX(6px);
+    }
+
+    60% {
+        transform: translateX(-4px);
+    }
+
+    80% {
+        transform: translateX(4px);
+    }
 }
 
 .field-shake {
@@ -282,7 +314,9 @@ textarea:focus-visible {
 }
 
 @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 /* Skeleton loading placeholder */
@@ -294,8 +328,13 @@ textarea:focus-visible {
 }
 
 @keyframes skeletonPulse {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
+    0% {
+        background-position: 200% 0;
+    }
+
+    100% {
+        background-position: -200% 0;
+    }
 }
 
 /* ============================================================
@@ -346,9 +385,17 @@ textarea:focus-visible {
 }
 
 @keyframes badgePop {
-    0% { transform: scale(0); }
-    80% { transform: scale(1.2); }
-    100% { transform: scale(1); }
+    0% {
+        transform: scale(0);
+    }
+
+    80% {
+        transform: scale(1.2);
+    }
+
+    100% {
+        transform: scale(1);
+    }
 }
 
 /* Notification Drawer Container */
@@ -406,6 +453,7 @@ textarea:focus-visible {
         opacity: 0;
         transform: translateY(-8px) scale(0.97);
     }
+
     to {
         opacity: 1;
         transform: translateY(0) scale(1);
@@ -789,12 +837,12 @@ textarea:focus-visible {
 }
 
 /* Row separator every 7 spaces (visual scanning aid) */
-.susu-book-grid > *:nth-child(7n+1) {
+.susu-book-grid>*:nth-child(7n+1) {
     position: relative;
 }
 
 @media (min-width: 1025px) {
-    .susu-book-grid > *:nth-child(7n+1)::before {
+    .susu-book-grid>*:nth-child(7n+1)::before {
         content: "";
         position: absolute;
         top: -0.5rem;
@@ -805,8 +853,9 @@ textarea:focus-visible {
         pointer-events: none;
     }
 
-    .susu-book-grid > *:nth-child(-n+7)::before {
-        display: none; /* Hide first row separator */
+    .susu-book-grid>*:nth-child(-n+7)::before {
+        display: none;
+        /* Hide first row separator */
     }
 }
 
@@ -844,9 +893,12 @@ textarea:focus-visible {
 }
 
 @keyframes pulseBorder {
-    0%, 100% {
+
+    0%,
+    100% {
         box-shadow: 0 0 0 3px rgba(255, 103, 0, 0.2);
     }
+
     50% {
         box-shadow: 0 0 0 7px rgba(255, 103, 0, 0.35);
     }
@@ -955,6 +1007,7 @@ textarea:focus-visible {
         opacity: 0;
         transform: translateY(16px) scale(0.96);
     }
+
     to {
         opacity: 1;
         transform: translateY(0) scale(1);
@@ -980,28 +1033,6 @@ textarea:focus-visible {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
 }
 
-/* ============================================================
-   USER PROFILE DROPDOWN
-   ============================================================ */
-.user-profile-dropdown {
-    box-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.25), 0 8px 18px -6px rgba(0, 0, 0, 0.12);
-}
-
-.user-profile-dropdown.open {
-    animation: userDropdownIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes userDropdownIn {
-    from {
-        opacity: 0;
-        transform: translateY(-6px) scale(0.96);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
-}
-
 .kpi-icon {
     width: 32px;
     height: 32px;
@@ -1021,16 +1052,26 @@ textarea:focus-visible {
         background: #ffffff !important;
         color: #000000 !important;
     }
-    header, footer, nav, .no-print, .sticky-cta-bar {
+
+    header,
+    footer,
+    nav,
+    .no-print,
+    .sticky-cta-bar {
         display: none !important;
     }
+
     .print-only {
         display: block !important;
     }
-    .card-elevated, .susu-passbook-container, .section-card {
+
+    .card-elevated,
+    .susu-passbook-container,
+    .section-card {
         box-shadow: none !important;
         border: 1px solid #000000 !important;
     }
+
     .page-enter {
         animation: none !important;
     }
@@ -1060,13 +1101,15 @@ textarea:focus-visible {
    COLLAPSIBLE DESKTOP SIDEBAR STYLES
    ============================================================ */
 #app_sidebar {
-    width: 16rem; /* 256px */
+    width: 16rem;
+    /* 256px */
     transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     background: linear-gradient(180deg, #07172b 0%, #0c2340 50%, #07172b 100%);
 }
 
 body.sidebar-collapsed #app_sidebar {
-    width: 5rem; /* 80px */
+    width: 5rem;
+    /* 80px */
 }
 
 /* Hide text elements in collapsed state */

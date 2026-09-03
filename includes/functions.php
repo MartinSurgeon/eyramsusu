@@ -31,23 +31,41 @@ function calculate_deposit_breakdown($daily_amount, $cash_paid, $current_change 
     if ($daily_amount <= 0 || $cash_paid <= 0) {
         return [
             'valid' => false,
-            'message' => 'Invalid daily amount or cash paid.'
+            'message' => 'Please enter a valid amount.'
         ];
     }
 
-    $total_pool = $cash_paid + $current_change;
-    $spaces_can_fill = (int)floor($total_pool / $daily_amount);
+    // Strict divisibility check (No remainder allowed)
+    $remainder = round(fmod($cash_paid, $daily_amount), 2);
+    if ($remainder > 0.005 && abs($remainder - $daily_amount) > 0.005) {
+        $ex1 = format_money($daily_amount);
+        $ex2 = format_money($daily_amount * 2);
+        $ex3 = format_money($daily_amount * 3);
+        return [
+            'valid' => false,
+            'message' => "Amount must be exact. Example: {$ex1}, {$ex2}, {$ex3}."
+        ];
+    }
+
+    $spaces_to_fill = (int)round($cash_paid / $daily_amount);
     $spaces_remaining = max(0, $total_spaces - $current_spaces_filled);
 
-    $spaces_to_fill = min($spaces_can_fill, $spaces_remaining);
+    if ($spaces_to_fill > $spaces_remaining) {
+        $maxAllowed = format_money($spaces_remaining * $daily_amount);
+        return [
+            'valid' => false,
+            'message' => "Only {$spaces_remaining} space(s) left on this card. Maximum allowed is {$maxAllowed}."
+        ];
+    }
+
     $money_applied = $spaces_to_fill * $daily_amount;
-    $new_change = round($total_pool - $money_applied, 2);
+    $new_change = $current_change; // Zero new remainder created
 
     return [
         'valid' => true,
         'cash_paid' => $cash_paid,
         'current_change' => $current_change,
-        'total_pool' => $total_pool,
+        'total_pool' => $cash_paid + $current_change,
         'spaces_to_fill' => $spaces_to_fill,
         'start_space' => $spaces_to_fill > 0 ? ($current_spaces_filled + 1) : 0,
         'end_space' => $spaces_to_fill > 0 ? ($current_spaces_filled + $spaces_to_fill) : 0,

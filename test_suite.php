@@ -41,30 +41,30 @@ assert_test("Test 2c: Added to savings is GH₵100.00", $t2['money_applied'], 10
 assert_test("Test 2d: Customer change is GH₵0.00", $t2['new_change'], 0.0);
 
 // -----------------------------------------------------------
-// TEST 3: Uneven Cash with Remainder Change (GH₵50 on GH₵20 plan)
+// TEST 3: Strict Divisibility Rejection (GH₵50 on GH₵20 plan is rejected)
 // -----------------------------------------------------------
 $t3 = calculate_deposit_breakdown(20.00, 50.00, 0.00, 5, 31);
-assert_test("Test 3a: GH₵50 on GH₵20 plan fills 2 spaces (#6 to #7)", $t3['spaces_to_fill'], 2);
-assert_test("Test 3b: Space range covers #6 to #7", $t3['start_space'] . '-' . $t3['end_space'], '6-7');
-assert_test("Test 3c: Applied money is GH₵40.00", $t3['money_applied'], 40.0);
-assert_test("Test 3d: Remaining change of GH₵10.00 stored in float", $t3['new_change'], 10.0);
+assert_test("Test 3a: GH₵50 on GH₵20 plan is rejected as invalid", $t3['valid'], false);
+assert_test("Test 3b: Clear message given without jargon", strpos($t3['message'], 'Amount must be exact') !== false, true);
 
 // -----------------------------------------------------------
-// TEST 4: Float Absorption (Customer uses existing GH₵10 float + pays GH₵10 cash)
+// TEST 4: Valid Multi-Space Deposit (GH₵40 on GH₵20 plan fills Spaces #6 to #7)
 // -----------------------------------------------------------
-$t4 = calculate_deposit_breakdown(20.00, 10.00, 10.00, 7, 31);
-assert_test("Test 4a: Combined cash (10) + float (10) fills Space #8", $t4['spaces_to_fill'], 1);
-assert_test("Test 4b: Space range is #8 to #8", $t4['start_space'] . '-' . $t4['end_space'], '8-8');
-assert_test("Test 4c: New change after space filled is GH₵0.00", $t4['new_change'], 0.0);
+$t4 = calculate_deposit_breakdown(20.00, 40.00, 0.00, 5, 31);
+assert_test("Test 4a: GH₵40 on GH₵20 plan is valid", $t4['valid'], true);
+assert_test("Test 4b: Fills exactly 2 spaces", $t4['spaces_to_fill'], 2);
+assert_test("Test 4c: Space range is #6 to #7", $t4['start_space'] . '-' . $t4['end_space'], '6-7');
+assert_test("Test 4d: Zero remainder created", $t4['new_change'], 0.0);
 
 // -----------------------------------------------------------
-// TEST 5: Cycle Boundary (Filling final space 31)
+// TEST 5: Cycle Boundary (Only 1 space left on card, rejects excess payment)
 // -----------------------------------------------------------
-$t5 = calculate_deposit_breakdown(20.00, 40.00, 0.00, 30, 31);
-assert_test("Test 5a: Only 1 space remaining, caps spaces to fill at 1", $t5['spaces_to_fill'], 1);
-assert_test("Test 5b: Stamped space is #31", $t5['start_space'] . '-' . $t5['end_space'], '31-31');
-assert_test("Test 5c: Card marked as completed", $t5['is_completed'], true);
-assert_test("Test 5d: Overflow cash of GH₵20 preserved in float", $t5['new_change'], 20.0);
+$t5_overflow = calculate_deposit_breakdown(20.00, 40.00, 0.00, 30, 31);
+assert_test("Test 5a: Excess payment beyond remaining spaces is rejected", $t5_overflow['valid'], false);
+
+$t5_exact = calculate_deposit_breakdown(20.00, 20.00, 0.00, 30, 31);
+assert_test("Test 5b: Exact final space payment fills Space #31", $t5_exact['spaces_to_fill'], 1);
+assert_test("Test 5c: Card marked as completed", $t5_exact['is_completed'], true);
 
 // -----------------------------------------------------------
 // TEST 6: Payout Math at 31 Spaces (Rule 8: Gross GH₵620 - Fee GH₵20 = Net GH₵600)

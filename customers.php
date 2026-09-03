@@ -9,6 +9,61 @@ $user = get_logged_in_user();
 $pageTitle = "Customers Directory";
 $pdo = get_db_connection();
 
+// Handle Edit Customer POST request (Admin only)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'edit_customer') {
+    require_admin();
+    
+    $customerId = (int)($_POST['customer_id'] ?? 0);
+    $fullName = trim($_POST['full_name'] ?? '');
+    $phone = trim($_POST['phone'] ?? '');
+    $location = trim($_POST['location'] ?? '');
+    $collectorId = !empty($_POST['assigned_collector_id']) ? (int)$_POST['assigned_collector_id'] : null;
+    $newDailyAmount = isset($_POST['daily_amount']) && $_POST['daily_amount'] !== '' ? (float)$_POST['daily_amount'] : null;
+
+    if ($customerId <= 0 || empty($fullName) || empty($phone)) {
+        set_flash_message('error', 'Please enter a name and phone number.');
+    } else {
+        try {
+            $pdo->beginTransaction();
+
+            // Update customer profile
+            $stmtUpd = $pdo->prepare("
+                UPDATE customers 
+                SET full_name = ?, phone = ?, location = ?, assigned_collector_id = ?
+                WHERE id = ?
+            ");
+            $stmtUpd->execute([$fullName, $phone, $location, $collectorId, $customerId]);
+
+            // If new daily rate provided, update active card
+            if ($newDailyAmount !== null && $newDailyAmount > 0) {
+                $stmtCardUpd = $pdo->prepare("
+                    UPDATE susu_cards 
+                    SET daily_amount = ? 
+                    WHERE customer_id = ? AND status = 'active'
+                ");
+                $stmtCardUpd->execute([$newDailyAmount, $customerId]);
+            }
+
+            $pdo->commit();
+            set_flash_message('success', 'Customer updated successfully.');
+            header('Location: customers.php' . (isset($_GET['page']) ? '?page=' . (int)$_GET['page'] : ''));
+            exit;
+        } catch (Exception $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            set_flash_message('error', 'Could not update customer. Please try again.');
+        }
+    }
+}
+
+// Fetch collectors for assignment dropdown
+$collectorsList = [];
+if ($user['role'] === 'admin') {
+    $stmtCol = $pdo->query("SELECT id, full_name FROM users WHERE role = 'collector' AND is_active = 1 ORDER BY full_name ASC");
+    $collectorsList = $stmtCol->fetchAll();
+}
+
 // If collector, show their assigned customers by default
 if ($user['role'] === 'collector') {
     $stmt = $pdo->prepare("
@@ -169,6 +224,30 @@ require_once __DIR__ . '/includes/header.php';
                                                 <span>Card</span>
                                             </a>
                                         <?php endif; ?>
+
+                                        <?php if ($user['role'] === 'admin'): ?>
+                                            <button type="button" 
+                                                    onclick='openEditCustomerModal(<?= htmlspecialchars(json_encode([
+                                                        'id' => $c['id'],
+                                                        'full_name' => $c['full_name'],
+                                                        'account_number' => $c['account_number'],
+                                                        'phone' => $c['phone'],
+                                                        'location' => $c['location'],
+                                                        'collector_id' => $c['assigned_collector_id'],
+                                                        'collector_name' => $c['collector_name'] ?: 'Unassigned',
+                                                        'card_id' => $c['card_id'],
+                                                        'card_number' => $c['card_number'],
+                                                        'daily_amount' => $c['daily_amount'],
+                                                        'spaces_filled' => $c['spaces_filled'],
+                                                        'total_spaces' => $c['total_spaces'],
+                                                        'total_saved' => $c['total_saved']
+                                                    ]), ENT_QUOTES, 'UTF-8') ?>)'
+                                                    class="btn-touch px-2.5 py-1.5 bg-blue-50 hover:bg-steel_azure hover:text-white text-steel_azure border border-blue-200 text-xs font-bold rounded-xl transition inline-flex items-center gap-1.5"
+                                                    title="Edit Customer & Plan">
+                                                <i class="fa-solid fa-pen-to-square text-xs"></i>
+                                                <span>Edit</span>
+                                            </button>
+                                        <?php endif; ?>
                                     </div>
                                 </td>
                             </tr>
@@ -202,17 +281,44 @@ require_once __DIR__ . '/includes/header.php';
                                 &bull; Float: <strong class="text-pumpkin_spice"><?= format_money($c['change_balance']) ?></strong>
                             <?php endif; ?>
                         </div>
-                        <div class="mt-3 flex items-center gap-2 pt-2 border-t border-silver-600/60">
+                    <?php endif; ?>
+
+                    <div class="mt-3 flex items-center gap-2 pt-2 border-t border-silver-600/60">
+                        <?php if ($c['card_id']): ?>
                             <a href="record_deposit.php?customer_id=<?= $c['id'] ?>" class="flex-1 btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-bold py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-2xs">
                                 <i class="fa-solid fa-plus text-xs"></i>
                                 <span>Deposit</span>
                             </a>
                             <a href="view_card.php?id=<?= $c['card_id'] ?>" class="flex-1 btn-touch bg-white hover:bg-platinum text-steel_azure border border-steel_azure text-xs font-bold py-2 rounded-xl flex items-center justify-center gap-1.5">
                                 <i class="fa-solid fa-id-card text-xs"></i>
-                                <span>View Card</span>
+                                <span>Card</span>
                             </a>
-                        </div>
-                    <?php endif; ?>
+                        <?php endif; ?>
+
+                        <?php if ($user['role'] === 'admin'): ?>
+                            <button type="button" 
+                                    onclick='openEditCustomerModal(<?= htmlspecialchars(json_encode([
+                                        'id' => $c['id'],
+                                        'full_name' => $c['full_name'],
+                                        'account_number' => $c['account_number'],
+                                        'phone' => $c['phone'],
+                                        'location' => $c['location'],
+                                        'collector_id' => $c['assigned_collector_id'],
+                                        'collector_name' => $c['collector_name'] ?: 'Unassigned',
+                                        'card_id' => $c['card_id'],
+                                        'card_number' => $c['card_number'],
+                                        'daily_amount' => $c['daily_amount'],
+                                        'spaces_filled' => $c['spaces_filled'],
+                                        'total_spaces' => $c['total_spaces'],
+                                        'total_saved' => $c['total_saved']
+                                    ]), ENT_QUOTES, 'UTF-8') ?>)'
+                                    class="px-3 py-2 bg-blue-50 hover:bg-steel_azure hover:text-white text-steel_azure border border-blue-200 text-xs font-bold rounded-xl transition inline-flex items-center justify-center gap-1.5"
+                                    title="Edit Customer">
+                                <i class="fa-solid fa-pen-to-square text-xs"></i>
+                                <span>Edit</span>
+                            </button>
+                        <?php endif; ?>
+                    </div>
                 </div>
             <?php endforeach; ?>
         </div>
@@ -223,5 +329,262 @@ require_once __DIR__ . '/includes/header.php';
     </div>
 
 </div>
+
+<?php if ($user['role'] === 'admin'): ?>
+<!-- Edit Customer & Daily Plan Modal -->
+<div id="edit_customer_modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs hidden transition-opacity">
+    <div class="bg-white rounded-2xl border border-silver-600 shadow-2xl max-w-lg w-full overflow-hidden transform transition-all scale-95 duration-200" id="edit_modal_box">
+        
+        <!-- Modal Header -->
+        <div class="p-4 sm:p-5 bg-gradient-to-r from-steel_azure to-steel_azure-400 text-white flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+                <i class="fa-solid fa-user-pen text-base"></i>
+                <h3 class="font-extrabold text-base">Edit Customer & Plan</h3>
+            </div>
+            <button type="button" onclick="closeEditCustomerModal()" class="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition" title="Close">
+                <i class="fa-solid fa-xmark text-sm"></i>
+            </button>
+        </div>
+
+        <!-- Form -->
+        <form id="edit_customer_form" method="POST" action="customers.php<?= isset($_GET['page']) ? '?page=' . (int)$_GET['page'] : '' ?>">
+            <input type="hidden" name="action" value="edit_customer">
+            <input type="hidden" id="edit_customer_id" name="customer_id" value="">
+
+            <!-- Step 1: Input Fields -->
+            <div id="edit_fields_step" class="p-5 sm:p-6 space-y-4 text-xs">
+                
+                <!-- Account Number Display -->
+                <div class="bg-platinum-800 p-3 rounded-xl border border-silver-600/70 flex items-center justify-between">
+                    <div>
+                        <span class="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Account Number</span>
+                        <div class="font-black text-steel_azure text-sm font-mono" id="edit_account_display">-</div>
+                    </div>
+                    <div id="edit_card_info_badge" class="hidden text-right">
+                        <span class="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Active Card</span>
+                        <div class="font-black text-emerald-700 text-xs" id="edit_card_display">-</div>
+                    </div>
+                </div>
+
+                <!-- Full Name -->
+                <div>
+                    <label for="edit_full_name" class="block font-bold text-slate-700 mb-1">Full Name *</label>
+                    <input type="text" id="edit_full_name" name="full_name" required
+                           class="w-full px-3.5 py-2.5 rounded-xl border border-silver-600 focus:border-steel_azure outline-none text-xs sm:text-sm text-slate-800 font-semibold transition">
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <!-- Phone Number -->
+                    <div>
+                        <label for="edit_phone" class="block font-bold text-slate-700 mb-1">Phone Number *</label>
+                        <input type="tel" id="edit_phone" name="phone" required
+                               class="w-full px-3.5 py-2.5 rounded-xl border border-silver-600 focus:border-steel_azure outline-none text-xs sm:text-sm text-slate-800 font-semibold transition">
+                    </div>
+
+                    <!-- Location -->
+                    <div>
+                        <label for="edit_location" class="block font-bold text-slate-700 mb-1">Location / Market Stall</label>
+                        <input type="text" id="edit_location" name="location"
+                               class="w-full px-3.5 py-2.5 rounded-xl border border-silver-600 focus:border-steel_azure outline-none text-xs sm:text-sm text-slate-800 font-semibold transition">
+                    </div>
+                </div>
+
+                <!-- Assigned Collector -->
+                <div>
+                    <label for="edit_collector_id" class="block font-bold text-slate-700 mb-1">Assigned Field Collector</label>
+                    <select id="edit_collector_id" name="assigned_collector_id"
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-silver-600 focus:border-steel_azure outline-none text-xs sm:text-sm text-slate-800 font-semibold transition bg-white">
+                        <option value="">-- Unassigned (Office Direct) --</option>
+                        <?php foreach ($collectorsList as $col): ?>
+                            <option value="<?= $col['id'] ?>"><?= htmlspecialchars($col['full_name']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <!-- Susu Daily Rate Section -->
+                <div id="edit_rate_section" class="p-3.5 bg-blue-50/60 rounded-xl border border-blue-200/80 space-y-1.5">
+                    <label for="edit_daily_amount" class="block font-black text-steel_azure text-xs">
+                        Agreed Daily Savings Rate (GH₵) *
+                    </label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 font-black text-xs">GH₵</span>
+                        <input type="number" step="1" min="1" id="edit_daily_amount" name="daily_amount"
+                               class="w-full pl-11 pr-4 py-2.5 rounded-xl border border-silver-600 focus:border-steel_azure outline-none text-sm font-black text-slate-800 transition bg-white">
+                    </div>
+                    <p class="text-[11px] text-slate-500 font-medium">New daily amount for future deposits.</p>
+                </div>
+
+                <!-- Modal Actions -->
+                <div class="pt-3 border-t border-silver-600/60 flex items-center justify-end gap-2.5">
+                    <button type="button" onclick="closeEditCustomerModal()" class="btn-touch px-4 py-2 bg-white text-slate-600 hover:bg-platinum-800 border border-silver-600 text-xs font-bold rounded-xl transition">
+                        Cancel
+                    </button>
+                    <button type="button" onclick="goToConfirmationStep()" class="btn-touch px-5 py-2 bg-steel_azure hover:bg-steel_azure-400 text-white text-xs font-black rounded-xl shadow-xs transition flex items-center gap-1.5">
+                        <span>Continue</span>
+                        <i class="fa-solid fa-arrow-right text-xs"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 2: Confirmation Review -->
+            <div id="edit_confirm_step" class="hidden p-5 sm:p-6 space-y-4 text-xs">
+                
+                <div class="p-3.5 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl font-bold flex items-center gap-2">
+                    <i class="fa-solid fa-triangle-exclamation text-amber-600 text-sm flex-shrink-0"></i>
+                    <span>Please confirm your changes before saving.</span>
+                </div>
+
+                <!-- Review Card -->
+                <div class="bg-platinum-800 p-4 rounded-xl border border-silver-600 space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-slate-500 font-semibold">Customer:</span>
+                        <span class="font-extrabold text-slate-800" id="confirm_name">-</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-slate-500 font-semibold">Phone:</span>
+                        <span class="font-bold text-slate-800" id="confirm_phone">-</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-slate-500 font-semibold">Location:</span>
+                        <span class="font-bold text-slate-800" id="confirm_location">-</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-slate-500 font-semibold">Collector:</span>
+                        <span class="font-bold text-steel_azure" id="confirm_collector">-</span>
+                    </div>
+                    <div class="pt-2 border-t border-silver-600/70 flex items-center justify-between">
+                        <span class="text-slate-600 font-bold">Daily Rate:</span>
+                        <span class="font-black text-sm text-pumpkin_spice" id="confirm_rate_change">-</span>
+                    </div>
+                </div>
+
+                <!-- Confirmation Buttons -->
+                <div class="pt-3 border-t border-silver-600/60 flex items-center justify-between">
+                    <button type="button" onclick="backToEditFields()" class="btn-touch px-4 py-2 bg-white text-slate-600 hover:bg-platinum-800 border border-silver-600 text-xs font-bold rounded-xl transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-arrow-left text-xs"></i>
+                        <span>Back to Edit</span>
+                    </button>
+                    <button type="submit" class="btn-touch px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl shadow-md transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-check text-xs"></i>
+                        <span>Yes, Save Changes</span>
+                    </button>
+                </div>
+            </div>
+
+        </form>
+    </div>
+</div>
+
+<script>
+let currentOriginalRate = 0;
+
+function openEditCustomerModal(data) {
+    document.getElementById('edit_customer_id').value = data.id;
+    document.getElementById('edit_account_display').textContent = data.account_number;
+    document.getElementById('edit_full_name').value = data.full_name || '';
+    document.getElementById('edit_phone').value = data.phone || '';
+    document.getElementById('edit_location').value = data.location || '';
+    document.getElementById('edit_collector_id').value = data.collector_id || '';
+
+    const cardBadge = document.getElementById('edit_card_info_badge');
+    const cardDisplay = document.getElementById('edit_card_display');
+    const rateSection = document.getElementById('edit_rate_section');
+    const dailyInput = document.getElementById('edit_daily_amount');
+
+    if (data.card_id) {
+        currentOriginalRate = parseFloat(data.daily_amount) || 0;
+        cardBadge.classList.remove('hidden');
+        cardDisplay.textContent = `Card #${data.card_number} (${data.spaces_filled}/${data.total_spaces} spaces)`;
+        rateSection.classList.remove('hidden');
+        dailyInput.value = currentOriginalRate > 0 ? currentOriginalRate.toFixed(2) : '';
+    } else {
+        currentOriginalRate = 0;
+        cardBadge.classList.add('hidden');
+        rateSection.classList.add('hidden');
+        dailyInput.value = '';
+    }
+
+    // Reset to step 1
+    backToEditFields();
+
+    // Show modal with smooth scale transition
+    const modal = document.getElementById('edit_customer_modal');
+    const box = document.getElementById('edit_modal_box');
+    modal.classList.remove('hidden');
+    setTimeout(() => {
+        box.classList.remove('scale-95');
+        box.classList.add('scale-100');
+    }, 10);
+}
+
+function closeEditCustomerModal() {
+    const modal = document.getElementById('edit_customer_modal');
+    const box = document.getElementById('edit_modal_box');
+    if (!modal) return;
+    box.classList.remove('scale-100');
+    box.classList.add('scale-95');
+    setTimeout(() => {
+        modal.classList.add('hidden');
+    }, 150);
+}
+
+function goToConfirmationStep() {
+    const name = document.getElementById('edit_full_name').value.trim();
+    const phone = document.getElementById('edit_phone').value.trim();
+    const location = document.getElementById('edit_location').value.trim() || 'Not specified';
+    const collectorSelect = document.getElementById('edit_collector_id');
+    const collectorText = collectorSelect.options[collectorSelect.selectedIndex]?.text || 'Unassigned';
+    const newRate = parseFloat(document.getElementById('edit_daily_amount').value) || 0;
+
+    if (!name || !phone) {
+        alert('Please enter customer full name and phone number.');
+        return;
+    }
+
+    // Populate confirmation fields
+    document.getElementById('confirm_name').textContent = name;
+    document.getElementById('confirm_phone').textContent = phone;
+    document.getElementById('confirm_location').textContent = location;
+    document.getElementById('confirm_collector').textContent = collectorText;
+
+    const rateConfirm = document.getElementById('confirm_rate_change');
+    if (currentOriginalRate > 0 && newRate > 0) {
+        if (Math.abs(currentOriginalRate - newRate) > 0.01) {
+            rateConfirm.textContent = `Changing from GH₵ ${currentOriginalRate.toFixed(2)} to GH₵ ${newRate.toFixed(2)}`;
+        } else {
+            rateConfirm.textContent = `Remaining at GH₵ ${currentOriginalRate.toFixed(2)}`;
+        }
+    } else if (newRate > 0) {
+        rateConfirm.textContent = `GH₵ ${newRate.toFixed(2)}`;
+    } else {
+        rateConfirm.textContent = 'No active card';
+    }
+
+    // Switch view
+    document.getElementById('edit_fields_step').classList.add('hidden');
+    document.getElementById('edit_confirm_step').classList.remove('hidden');
+}
+
+function backToEditFields() {
+    document.getElementById('edit_confirm_step').classList.add('hidden');
+    document.getElementById('edit_fields_step').classList.remove('hidden');
+}
+
+// Close on Escape or click outside
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeEditCustomerModal();
+    }
+});
+
+document.addEventListener('click', function(e) {
+    const modal = document.getElementById('edit_customer_modal');
+    const box = document.getElementById('edit_modal_box');
+    if (modal && !modal.classList.contains('hidden') && e.target === modal) {
+        closeEditCustomerModal();
+    }
+});
+</script>
+<?php endif; ?>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

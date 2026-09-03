@@ -245,28 +245,38 @@ require_once __DIR__ . '/includes/header.php';
                         2. Cash Received from Customer *
                     </label>
 
-                    <!-- Quick Tap Preset Buttons -->
-                    <div class="grid grid-cols-4 gap-2 mb-3">
-                        <button type="button" data-mult="1" class="preset-btn bg-platinum hover:bg-silver-700 text-steel_azure border border-silver-600 text-xs py-2 px-1">
-                            1x (<?= format_money($activeCustomer['daily_amount'] * 1) ?>)
+                    <!-- 1-Click Quick Space Buttons (Fitts's Law) -->
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+                        <button type="button" data-mult="1" class="preset-btn rounded-xl bg-white hover:bg-platinum-800 text-slate-700 border-2 border-silver-600 font-extrabold text-xs py-2.5 px-2 transition flex flex-col items-center">
+                            <span class="text-[11px] text-slate-500">1 Space</span>
+                            <span class="text-steel_azure text-xs"><?= format_money($activeCustomer['daily_amount'] * 1) ?></span>
                         </button>
-                        <button type="button" data-mult="2" class="preset-btn bg-platinum hover:bg-silver-700 text-steel_azure border border-silver-600 text-xs py-2 px-1">
-                            2x (<?= format_money($activeCustomer['daily_amount'] * 2) ?>)
+                        <button type="button" data-mult="2" class="preset-btn rounded-xl bg-white hover:bg-platinum-800 text-slate-700 border-2 border-silver-600 font-extrabold text-xs py-2.5 px-2 transition flex flex-col items-center">
+                            <span class="text-[11px] text-slate-500">2 Spaces</span>
+                            <span class="text-steel_azure text-xs"><?= format_money($activeCustomer['daily_amount'] * 2) ?></span>
                         </button>
-                        <button type="button" data-mult="5" class="preset-btn bg-platinum hover:bg-silver-700 text-steel_azure border border-silver-600 text-xs py-2 px-1">
-                            5x (<?= format_money($activeCustomer['daily_amount'] * 5) ?>)
+                        <button type="button" data-mult="3" class="preset-btn rounded-xl bg-white hover:bg-platinum-800 text-slate-700 border-2 border-silver-600 font-extrabold text-xs py-2.5 px-2 transition flex flex-col items-center">
+                            <span class="text-[11px] text-slate-500">3 Spaces</span>
+                            <span class="text-steel_azure text-xs"><?= format_money($activeCustomer['daily_amount'] * 3) ?></span>
                         </button>
-                        <button type="button" data-mult="10" class="preset-btn bg-platinum hover:bg-silver-700 text-steel_azure border border-silver-600 text-xs py-2 px-1">
-                            10x (<?= format_money($activeCustomer['daily_amount'] * 10) ?>)
+                        <button type="button" data-mult="5" class="preset-btn rounded-xl bg-white hover:bg-platinum-800 text-slate-700 border-2 border-silver-600 font-extrabold text-xs py-2.5 px-2 transition flex flex-col items-center">
+                            <span class="text-[11px] text-slate-500">5 Spaces</span>
+                            <span class="text-steel_azure text-xs"><?= format_money($activeCustomer['daily_amount'] * 5) ?></span>
                         </button>
                     </div>
 
                     <!-- Input Box -->
                     <div class="relative">
                         <span class="absolute inset-y-0 left-0 flex items-center pl-4 text-slate-500 font-extrabold text-sm sm:text-base">GH₵</span>
-                        <input type="number" step="0.50" min="1" id="cash_paid" name="cash_paid" required
+                        <input type="number" step="<?= $activeCustomer['daily_amount'] ?>" min="<?= $activeCustomer['daily_amount'] ?>" id="cash_paid" name="cash_paid" required
                                class="w-full pl-14 pr-4 py-3.5 rounded-xl border-2 border-silver-600 focus:border-pumpkin_spice focus:ring-2 focus:ring-pumpkin_spice-800 outline-none text-base sm:text-lg font-black text-slate-800 transition"
                                placeholder="e.g. <?= number_format($activeCustomer['daily_amount'], 2) ?>">
+                    </div>
+
+                    <!-- Simple Inline Divisibility Warning (No Jargon) -->
+                    <div id="remainder_error_msg" class="hidden mt-2 p-2.5 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-bold flex items-center gap-2">
+                        <i class="fa-solid fa-circle-exclamation text-red-500 text-sm flex-shrink-0"></i>
+                        <span id="remainder_error_text"></span>
                     </div>
                 </div>
 
