@@ -20,8 +20,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $collectorId = !empty($_POST['assigned_collector_id']) ? (int)$_POST['assigned_collector_id'] : null;
     $newDailyAmount = isset($_POST['daily_amount']) && $_POST['daily_amount'] !== '' ? (float)$_POST['daily_amount'] : null;
 
+    $phoneDigits = preg_replace('/[^0-9]/', '', $phone);
+
     if ($customerId <= 0 || empty($fullName) || empty($phone)) {
         set_flash_message('error', 'Please enter a name and phone number.');
+    } elseif ($phone !== $phoneDigits || strlen($phoneDigits) < 10 || strlen($phoneDigits) > 15) {
+        set_flash_message('error', 'Phone number must contain numbers only (10 to 15 digits).');
     } else {
         try {
             $pdo->beginTransaction();
@@ -32,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 SET full_name = ?, phone = ?, location = ?, assigned_collector_id = ?
                 WHERE id = ?
             ");
-            $stmtUpd->execute([$fullName, $phone, $location, $collectorId, $customerId]);
+            $stmtUpd->execute([$fullName, $phoneDigits, $location, $collectorId, $customerId]);
 
             // If new daily rate provided, update active card
             if ($newDailyAmount !== null && $newDailyAmount > 0) {
@@ -467,9 +471,18 @@ window.eyramConfig = {
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     <!-- Phone Number -->
                     <div>
-                        <label for="edit_phone" class="block font-bold text-slate-700 mb-1">Phone Number *</label>
+                        <label for="edit_phone" class="block font-bold text-slate-700 mb-1">
+                            Phone Number *
+                            <span class="text-[10px] text-slate-400 font-normal ml-1">(Numbers only)</span>
+                        </label>
                         <input type="tel" id="edit_phone" name="phone" required
-                               class="w-full px-3.5 py-2.5 rounded-xl border border-silver-600 focus:border-steel_azure outline-none text-xs sm:text-sm text-slate-800 font-semibold transition">
+                               inputmode="numeric"
+                               pattern="[0-9]{10,15}"
+                               maxlength="15"
+                               oninput="this.value = this.value.replace(/[^0-9]/g, '')"
+                               onkeypress="return event.charCode >= 48 && event.charCode <= 57"
+                               class="w-full px-3.5 py-2.5 rounded-xl border border-silver-600 focus:border-steel_azure outline-none text-xs sm:text-sm text-slate-800 font-semibold font-mono transition"
+                               placeholder="e.g. 0244123456">
                     </div>
 
                     <!-- Location -->
@@ -621,14 +634,20 @@ function closeEditCustomerModal() {
 
 function goToConfirmationStep() {
     const name = document.getElementById('edit_full_name').value.trim();
-    const phone = document.getElementById('edit_phone').value.trim();
+    const phoneInput = document.getElementById('edit_phone');
+    const phone = phoneInput.value.trim().replace(/[^0-9]/g, '');
+    phoneInput.value = phone;
     const location = document.getElementById('edit_location').value.trim() || 'Not specified';
     const collectorSelect = document.getElementById('edit_collector_id');
     const collectorText = collectorSelect.options[collectorSelect.selectedIndex]?.text || 'Unassigned';
     const newRate = parseFloat(document.getElementById('edit_daily_amount').value) || 0;
 
-    if (!name || !phone) {
-        alert('Please enter customer full name and phone number.');
+    if (!name) {
+        alert('Please enter customer full name.');
+        return;
+    }
+    if (!phone || phone.length < 10 || phone.length > 15) {
+        alert('Phone number must contain numbers only (at least 10 digits, e.g. 0244123456).');
         return;
     }
 

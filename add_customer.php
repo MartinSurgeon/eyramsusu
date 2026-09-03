@@ -12,61 +12,89 @@ $error = '';
 $stmtCol = $pdo->query("SELECT id, full_name FROM users WHERE role = 'collector' AND is_active = 1 ORDER BY full_name ASC");
 $collectors = $stmtCol->fetchAll();
 
+// Compute suggested next customer ID from existing numeric account numbers
+$suggestedId = '0001';
+try {
+    $stmtMaxNum = $pdo->query("SELECT MAX(CAST(account_number AS UNSIGNED)) FROM customers WHERE account_number REGEXP '^[0-9]+$'");
+    $maxNum = (int)$stmtMaxNum->fetchColumn();
+    if ($maxNum > 0) {
+        $suggestedId = str_pad($maxNum + 1, 4, '0', STR_PAD_LEFT);
+    }
+} catch (Exception $e) {
+    $maxId = (int)$pdo->query("SELECT COALESCE(MAX(id), 0) FROM customers")->fetchColumn();
+    $suggestedId = str_pad($maxId + 1, 4, '0', STR_PAD_LEFT);
+}
+
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+    $accountNumber = trim($_POST['account_number'] ?? '');
     $fullName = trim($_POST['full_name'] ?? '');
     $phone = trim($_POST['phone'] ?? '');
     $location = trim($_POST['location'] ?? '');
     $collectorId = !empty($_POST['assigned_collector_id']) ? (int)$_POST['assigned_collector_id'] : null;
     $dailyAmount = (float)($_POST['daily_amount'] ?? 0);
 
-    if (empty($fullName) || empty($phone)) {
-        $error = 'Customer name and phone number are required.';
+    // Sanitize phone (numbers only)
+    $phoneDigits = preg_replace('/[^0-9]/', '', $phone);
+
+    if (empty($accountNumber)) {
+        $error = 'Customer ID / Account Number is required.';
+    } elseif (empty($fullName)) {
+        $error = 'Customer full name is required.';
+    } elseif (empty($phone) || $phone !== $phoneDigits) {
+        $error = 'Phone number must contain numbers only (no letters or text).';
+    } elseif (strlen($phoneDigits) < 10 || strlen($phoneDigits) > 15) {
+        $error = 'Phone number must be between 10 and 15 digits (e.g. 0244123456).';
     } elseif ($dailyAmount <= 0) {
         $error = 'Please enter a valid agreed contribution amount (e.g. GH₵ 20, 50, 100).';
     } else {
-        try {
-            $pdo->beginTransaction();
+        // Check for duplicate account number
+        $stmtCheck = $pdo->prepare("SELECT id, full_name FROM customers WHERE account_number = ? LIMIT 1");
+        $stmtCheck->execute([$accountNumber]);
+        $existing = $stmtCheck->fetch();
 
-            // Generate next account number safely using MAX(id)
-            $maxId = (int)$pdo->query("SELECT COALESCE(MAX(id), 0) FROM customers")->fetchColumn();
-            $accountNumber = 'ACC-' . str_pad($maxId + 1001, 4, '0', STR_PAD_LEFT);
+        if ($existing) {
+            $error = "Customer ID '{$accountNumber}' is already in use by '{$existing['full_name']}'. Please enter a unique ID.";
+        } else {
+            try {
+                $pdo->beginTransaction();
 
-            // Insert Customer
-            $stmt = $pdo->prepare("
-                INSERT INTO customers (account_number, full_name, phone, location, assigned_collector_id, change_balance) 
-                VALUES (?, ?, ?, ?, ?, 0.00)
-            ");
-            $stmt->execute([$accountNumber, $fullName, $phone, $location, $collectorId]);
-            $customerId = $pdo->lastInsertId();
+                // Insert Customer with manual ID
+                $stmt = $pdo->prepare("
+                    INSERT INTO customers (account_number, full_name, phone, location, assigned_collector_id, change_balance) 
+                    VALUES (?, ?, ?, ?, ?, 0.00)
+                ");
+                $stmt->execute([$accountNumber, $fullName, $phoneDigits, $location, $collectorId]);
+                $customerId = $pdo->lastInsertId();
 
-            // Create initial 31-Space Susu Card
-            $stmtCard = $pdo->prepare("
-                INSERT INTO susu_cards (customer_id, card_number, daily_amount, total_spaces, spaces_filled, total_saved, status) 
-                VALUES (?, 1, ?, 31, 0, 0.00, 'active')
-            ");
-            $stmtCard->execute([$customerId, $dailyAmount]);
-            $cardId = $pdo->lastInsertId();
+                // Create initial 31-Space Susu Card
+                $stmtCard = $pdo->prepare("
+                    INSERT INTO susu_cards (customer_id, card_number, daily_amount, total_spaces, spaces_filled, total_saved, status) 
+                    VALUES (?, 1, ?, 31, 0, 0.00, 'active')
+                ");
+                $stmtCard->execute([$customerId, $dailyAmount]);
+                $cardId = $pdo->lastInsertId();
 
-            if ($collectorId) {
-                create_notification(
-                    $collectorId,
-                    'customer_assigned',
-                    "New Client Assigned",
-                    "New customer '{$fullName}' ({$accountNumber}) was assigned to your collection route.",
-                    "collector_dashboard.php"
-                );
+                if ($collectorId) {
+                    create_notification(
+                        $collectorId,
+                        'customer_assigned',
+                        "New Client Assigned",
+                        "New customer '{$fullName}' ({$accountNumber}) was assigned to your collection route.",
+                        "collector_dashboard.php"
+                    );
+                }
+
+                $pdo->commit();
+
+                set_flash_message('success', "Customer '{$fullName}' registered successfully with ID #{$accountNumber}!");
+                header("Location: view_card.php?id={$cardId}");
+                exit;
+            } catch (Exception $e) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                $error = 'Database error: ' . $e->getMessage();
             }
-
-            $pdo->commit();
-
-            set_flash_message('success', "Customer '{$fullName}' registered successfully with Account #{$accountNumber}!");
-            header("Location: view_card.php?id={$cardId}");
-            exit;
-        } catch (Exception $e) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
-            }
-            $error = 'Database error: ' . $e->getMessage();
         }
     }
 }
@@ -136,29 +164,76 @@ require_once __DIR__ . '/includes/header.php';
             </div>
 
             <div class="space-y-4">
-                <div>
-                    <label for="full_name" class="block text-xs font-bold text-slate-700 mb-1">Full Name <span class="text-red-500">*</span></label>
-                    <input type="text" id="full_name" name="full_name" required autofocus
-                           value="<?= htmlspecialchars($_POST['full_name'] ?? '') ?>"
-                           class="w-full px-3.5 py-2.5 rounded-xl border border-silver-600 focus:border-steel_azure focus:ring-2 focus:ring-cornflower_ocean-800 outline-none text-xs sm:text-sm transition"
-                           placeholder="e.g. Esi Mensah">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label for="account_number" class="block text-xs font-bold text-slate-700 mb-1">
+                            Customer ID / Account Number <span class="text-red-500">*</span>
+                        </label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                                <i class="fa-solid fa-hashtag text-xs"></i>
+                            </span>
+                            <input type="text" id="account_number" name="account_number" required autofocus
+                                   value="<?= htmlspecialchars($_POST['account_number'] ?? $suggestedId) ?>"
+                                   oninput="updateReviewSummary()"
+                                   class="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-silver-600 focus:border-steel_azure focus:ring-2 focus:ring-cornflower_ocean-800 outline-none text-xs sm:text-sm font-mono font-bold text-steel_azure transition"
+                                   placeholder="e.g. 0035, 0044, or CUST-01">
+                        </div>
+                        <p class="text-[10px] text-slate-400 mt-1">Manual passbook booklet number or custom ID.</p>
+                    </div>
+
+                    <div>
+                        <label for="full_name" class="block text-xs font-bold text-slate-700 mb-1">
+                            Full Name <span class="text-red-500">*</span>
+                        </label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                                <i class="fa-solid fa-user text-xs"></i>
+                            </span>
+                            <input type="text" id="full_name" name="full_name" required
+                                   value="<?= htmlspecialchars($_POST['full_name'] ?? '') ?>"
+                                   oninput="updateReviewSummary()"
+                                   class="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-silver-600 focus:border-steel_azure focus:ring-2 focus:ring-cornflower_ocean-800 outline-none text-xs sm:text-sm transition font-semibold"
+                                   placeholder="e.g. Esi Mensah">
+                        </div>
+                    </div>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                        <label for="phone" class="block text-xs font-bold text-slate-700 mb-1">Phone Number <span class="text-red-500">*</span></label>
-                        <input type="tel" id="phone" name="phone" required
-                               value="<?= htmlspecialchars($_POST['phone'] ?? '') ?>"
-                               class="w-full px-3.5 py-2.5 rounded-xl border border-silver-600 focus:border-steel_azure focus:ring-2 focus:ring-cornflower_ocean-800 outline-none text-xs sm:text-sm transition"
-                               placeholder="e.g. 0244123456">
+                        <label for="phone" class="block text-xs font-bold text-slate-700 mb-1">
+                            Phone Number <span class="text-red-500">*</span>
+                            <span class="text-[10px] text-slate-400 font-normal ml-1">(Numbers only)</span>
+                        </label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                                <i class="fa-solid fa-phone text-xs"></i>
+                            </span>
+                            <input type="tel" id="phone" name="phone" required
+                                   inputmode="numeric"
+                                   pattern="[0-9]{10,15}"
+                                   maxlength="15"
+                                   oninput="this.value = this.value.replace(/[^0-9]/g, ''); updateReviewSummary();"
+                                   onkeypress="return event.charCode >= 48 && event.charCode <= 57"
+                                   value="<?= htmlspecialchars($_POST['phone'] ?? '') ?>"
+                                   class="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-silver-600 focus:border-steel_azure focus:ring-2 focus:ring-cornflower_ocean-800 outline-none text-xs sm:text-sm transition font-mono"
+                                   placeholder="e.g. 0244123456">
+                        </div>
+                        <p class="text-[10px] text-slate-400 mt-1">10 to 15 digits. Numbers only (no text).</p>
                     </div>
 
                     <div>
                         <label for="location" class="block text-xs font-bold text-slate-700 mb-1">Location / Market Stall</label>
-                        <input type="text" id="location" name="location"
-                               value="<?= htmlspecialchars($_POST['location'] ?? '') ?>"
-                               class="w-full px-3.5 py-2.5 rounded-xl border border-silver-600 focus:border-steel_azure focus:ring-2 focus:ring-cornflower_ocean-800 outline-none text-xs sm:text-sm transition"
-                               placeholder="e.g. Makola Market, Shed 4">
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                                <i class="fa-solid fa-location-dot text-xs"></i>
+                            </span>
+                            <input type="text" id="location" name="location"
+                                   value="<?= htmlspecialchars($_POST['location'] ?? '') ?>"
+                                   oninput="updateReviewSummary()"
+                                   class="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-silver-600 focus:border-steel_azure focus:ring-2 focus:ring-cornflower_ocean-800 outline-none text-xs sm:text-sm transition"
+                                   placeholder="e.g. Makola Market, Shed 4">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -249,20 +324,24 @@ require_once __DIR__ . '/includes/header.php';
                 <div class="text-xs font-black uppercase text-slate-400 tracking-wider">Registration Summary</div>
                 <div class="grid grid-cols-2 gap-3 text-xs">
                     <div>
+                        <span class="text-slate-400 font-medium">Customer ID:</span>
+                        <div id="summary_account" class="font-mono font-bold text-steel_azure truncate">—</div>
+                    </div>
+                    <div>
                         <span class="text-slate-400 font-medium">Customer:</span>
                         <div id="summary_name" class="font-bold text-slate-800 truncate">—</div>
                     </div>
                     <div>
                         <span class="text-slate-400 font-medium">Phone:</span>
-                        <div id="summary_phone" class="font-bold text-slate-800 truncate">—</div>
+                        <div id="summary_phone" class="font-mono font-bold text-slate-800 truncate">—</div>
                     </div>
                     <div>
                         <span class="text-slate-400 font-medium">Assigned Collector:</span>
                         <div id="summary_collector" class="font-bold text-steel_azure truncate">Unassigned</div>
                     </div>
-                    <div>
+                    <div class="col-span-2 pt-1 border-t border-silver-600/50 flex justify-between items-center">
                         <span class="text-slate-400 font-medium">31-Space Target:</span>
-                        <div id="summary_target" class="font-bold text-emerald-600">GH₵ 620.00</div>
+                        <div id="summary_target" class="font-black text-emerald-600">GH₵ 620.00</div>
                     </div>
                 </div>
             </div>
@@ -312,10 +391,20 @@ function goToStep(step) {
 function validateAndGoToStep(targetStep) {
     if (targetStep === 2 || targetStep === 3) {
         // Validate Step 1 first
+        const accountField = document.getElementById('account_number');
         const nameField = document.getElementById('full_name');
         const phoneField = document.getElementById('phone');
 
         let valid = true;
+
+        if (!accountField.value.trim()) {
+            accountField.classList.add('field-error', 'field-shake');
+            valid = false;
+            setTimeout(() => accountField.classList.remove('field-shake'), 400);
+        } else {
+            accountField.classList.remove('field-error');
+        }
+
         if (!nameField.value.trim()) {
             nameField.classList.add('field-error', 'field-shake');
             valid = false;
@@ -324,10 +413,15 @@ function validateAndGoToStep(targetStep) {
             nameField.classList.remove('field-error');
         }
 
-        if (!phoneField.value.trim()) {
+        const rawPhone = phoneField.value.trim();
+        const digitsOnly = rawPhone.replace(/[^0-9]/g, '');
+        phoneField.value = digitsOnly;
+
+        if (!digitsOnly || digitsOnly.length < 10 || digitsOnly.length > 15) {
             phoneField.classList.add('field-error', 'field-shake');
             valid = false;
             setTimeout(() => phoneField.classList.remove('field-shake'), 400);
+            alert('Phone number must contain numbers only (at least 10 digits, e.g. 0244123456).');
         } else {
             phoneField.classList.remove('field-error');
         }
@@ -396,6 +490,7 @@ function setDailyAmount(amount) {
 }
 
 function updateReviewSummary() {
+    const account = document.getElementById('account_number').value.trim() || '—';
     const name = document.getElementById('full_name').value.trim() || '—';
     const phone = document.getElementById('phone').value.trim() || '—';
     const collectorSelect = document.getElementById('assigned_collector_id');
@@ -403,6 +498,7 @@ function updateReviewSummary() {
     const daily = parseFloat(document.getElementById('daily_amount').value) || 0;
     const target = daily * 31;
 
+    document.getElementById('summary_account').textContent = account;
     document.getElementById('summary_name').textContent = name;
     document.getElementById('summary_phone').textContent = phone;
     document.getElementById('summary_collector').textContent = collectorText;
