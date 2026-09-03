@@ -204,7 +204,18 @@ require_once __DIR__ . '/includes/header.php';
                                             <?= $c['spaces_filled'] ?> of <?= $c['total_spaces'] ?> spaces (<?= format_money($c['total_saved']) ?>)
                                         </div>
                                     <?php else: ?>
-                                        <span class="text-xs text-amber-600 font-medium">No active card</span>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-xs text-amber-600 font-semibold">No active card</span>
+                                            <?php if ($user['role'] === 'admin'): ?>
+                                                <form method="POST" action="start_new_card.php" class="inline">
+                                                    <input type="hidden" name="customer_id" value="<?= $c['id'] ?>">
+                                                    <input type="hidden" name="daily_amount" value="<?= $c['daily_amount'] > 0 ? $c['daily_amount'] : 20.00 ?>">
+                                                    <button type="submit" class="px-2 py-0.5 bg-pumpkin_spice-900 hover:bg-pumpkin_spice text-pumpkin_spice hover:text-white border border-pumpkin_spice text-[10px] font-bold rounded-md transition cursor-pointer">
+                                                        + Open
+                                                    </button>
+                                                </form>
+                                            <?php endif; ?>
+                                        </div>
                                     <?php endif; ?>
                                 </td>
                                 <td class="py-3 px-4">
@@ -223,6 +234,15 @@ require_once __DIR__ . '/includes/header.php';
                                                 <i class="fa-solid fa-id-card text-xs"></i>
                                                 <span>Card</span>
                                             </a>
+                                        <?php elseif ($user['role'] === 'admin'): ?>
+                                            <form method="POST" action="start_new_card.php" class="inline">
+                                                <input type="hidden" name="customer_id" value="<?= $c['id'] ?>">
+                                                <input type="hidden" name="daily_amount" value="<?= $c['daily_amount'] > 0 ? $c['daily_amount'] : 20.00 ?>">
+                                                <button type="submit" class="btn-touch px-3 py-1.5 bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold rounded-xl shadow-2xs transition inline-flex items-center gap-1.5 cursor-pointer">
+                                                    <i class="fa-solid fa-circle-plus text-xs"></i>
+                                                    <span>+ Open Card</span>
+                                                </button>
+                                            </form>
                                         <?php endif; ?>
 
                                         <?php if ($user['role'] === 'admin'): ?>
@@ -293,6 +313,15 @@ require_once __DIR__ . '/includes/header.php';
                                 <i class="fa-solid fa-id-card text-xs"></i>
                                 <span>Card</span>
                             </a>
+                        <?php elseif ($user['role'] === 'admin'): ?>
+                            <form method="POST" action="start_new_card.php" class="flex-1">
+                                <input type="hidden" name="customer_id" value="<?= $c['id'] ?>">
+                                <input type="hidden" name="daily_amount" value="<?= $c['daily_amount'] > 0 ? $c['daily_amount'] : 20.00 ?>">
+                                <button type="submit" class="w-full btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer">
+                                    <i class="fa-solid fa-circle-plus text-xs"></i>
+                                    <span>+ Open Susu Card</span>
+                                </button>
+                            </form>
                         <?php endif; ?>
 
                         <?php if ($user['role'] === 'admin'): ?>

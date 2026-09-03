@@ -69,6 +69,11 @@ $stmtPayout = $pdo->prepare("SELECT * FROM payouts WHERE card_id = ? ORDER BY id
 $stmtPayout->execute([$cardId]);
 $payout = $stmtPayout->fetch();
 
+// Check if customer already has another active card
+$stmtActive = $pdo->prepare("SELECT id, card_number FROM susu_cards WHERE customer_id = ? AND status = 'active' LIMIT 1");
+$stmtActive->execute([$card['customer_id']]);
+$otherActiveCard = $stmtActive->fetch();
+
 $pageTitle = "Susu Card #" . $card['card_number'] . " - " . $card['full_name'];
 require_once __DIR__ . '/includes/header.php';
 ?>
@@ -81,13 +86,13 @@ require_once __DIR__ . '/includes/header.php';
         <p>31-Space Passbook &bull; <?= htmlspecialchars($card['full_name']) ?> &bull; Card #<?= $card['card_number'] ?></p>
     </div>
 
-    <!-- Top Navigation & Print Actions -->
-    <div class="flex items-center justify-between no-print">
+    <!-- Top Navigation & Actions (HCI: Fitts's Law Accessible Placement) -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 no-print">
         <a href="customers.php" class="text-xs font-bold text-cornflower_ocean hover:text-steel_azure inline-flex items-center gap-1.5">
             <i class="fa-solid fa-arrow-left text-xs"></i>
             <span>Customers Directory</span>
         </a>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
             <button onclick="window.print()" class="btn-touch bg-white text-slate-700 hover:bg-platinum border border-silver-600 text-xs font-bold px-3 py-1.5 shadow-2xs rounded-xl inline-flex items-center gap-1.5">
                 <i class="fa-solid fa-print text-xs"></i>
                 <span>Print Passbook</span>
@@ -97,15 +102,41 @@ require_once __DIR__ . '/includes/header.php';
                     <i class="fa-solid fa-plus text-xs"></i>
                     <span>Record Deposit</span>
                 </a>
+            <?php elseif ($otherActiveCard): ?>
+                <a href="view_card.php?id=<?= $otherActiveCard['id'] ?>" class="btn-touch bg-steel_azure hover:bg-steel_azure-400 text-white text-xs font-extrabold px-3.5 py-1.5 shadow-2xs rounded-xl inline-flex items-center gap-1.5">
+                    <i class="fa-solid fa-id-card text-xs"></i>
+                    <span>View Active Card #<?= $otherActiveCard['card_number'] ?></span>
+                </a>
+            <?php elseif ($user['role'] === 'admin'): ?>
+                <form method="POST" action="start_new_card.php" class="inline">
+                    <input type="hidden" name="customer_id" value="<?= $card['customer_id'] ?>">
+                    <input type="hidden" name="daily_amount" value="<?= $card['daily_amount'] ?>">
+                    <button type="submit" class="btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold px-4 py-1.5 shadow-2xs rounded-xl inline-flex items-center gap-1.5 cursor-pointer">
+                        <i class="fa-solid fa-circle-plus text-xs"></i>
+                        <span>+ Open New Susu Card</span>
+                    </button>
+                </form>
             <?php endif; ?>
         </div>
     </div>
 
-    <!-- Celebratory Banner for Completed Cards (Peak-End Rule) -->
+    <!-- Celebratory Banner for Completed Cards (Peak-End Rule: Prominent Next Step CTA) -->
     <?php if ($card['status'] === 'completed'): ?>
-        <div class="celebration-banner">
-            <div class="text-lg font-black text-emerald-800">🎉 Card Completed!</div>
-            <p class="text-xs font-semibold text-emerald-700 mt-0.5">All 31 spaces have been successfully filled. This Susu cycle is complete.</p>
+        <div class="celebration-banner flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-5">
+            <div>
+                <div class="text-base sm:text-lg font-black text-emerald-800">🎉 Card Completed!</div>
+                <p class="text-xs font-semibold text-emerald-700 mt-0.5">All 31 spaces have been successfully filled. This Susu cycle is complete.</p>
+            </div>
+            <?php if ($user['role'] === 'admin' && !$otherActiveCard): ?>
+                <form method="POST" action="start_new_card.php" class="flex-shrink-0">
+                    <input type="hidden" name="customer_id" value="<?= $card['customer_id'] ?>">
+                    <input type="hidden" name="daily_amount" value="<?= $card['daily_amount'] ?>">
+                    <button type="submit" class="btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs sm:text-sm font-extrabold px-5 py-2.5 shadow-md rounded-xl inline-flex items-center gap-2 cursor-pointer">
+                        <i class="fa-solid fa-circle-plus text-sm"></i>
+                        <span>+ Open Next Susu Card (#<?= $card['card_number'] + 1 ?>)</span>
+                    </button>
+                </form>
+            <?php endif; ?>
         </div>
     <?php endif; ?>
 
@@ -182,6 +213,33 @@ require_once __DIR__ . '/includes/header.php';
                 <div class="bg-gradient-to-r from-cornflower_ocean via-emerald-500 to-emerald-600 h-2 rounded-full transition-all duration-500" style="width: <?= $progress ?>%"></div>
             </div>
         </div>
+
+        <?php if ($card['status'] !== 'active' && !$otherActiveCard && $user['role'] === 'admin'): ?>
+            <div class="mt-5 pt-4 border-t border-silver-600/60 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-amber-50/70 p-4 rounded-xl border border-amber-200">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-sm font-bold flex-shrink-0">
+                        <i class="fa-solid fa-bell"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-extrabold text-xs sm:text-sm text-slate-800">
+                            Start Next Savings Cycle for <?= htmlspecialchars($card['full_name']) ?>
+                        </h4>
+                        <p class="text-[11px] text-slate-500">
+                            This card is closed. Open Card #<?= $card['card_number'] + 1 ?> to continue daily collections.
+                        </p>
+                    </div>
+                </div>
+
+                <form method="POST" action="start_new_card.php" class="flex-shrink-0">
+                    <input type="hidden" name="customer_id" value="<?= $card['customer_id'] ?>">
+                    <input type="hidden" name="daily_amount" value="<?= $card['daily_amount'] ?>">
+                    <button type="submit" class="btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold px-4 py-2.5 rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer">
+                        <i class="fa-solid fa-circle-plus text-xs"></i>
+                        <span>+ Open New Susu Card</span>
+                    </button>
+                </form>
+            </div>
+        <?php endif; ?>
     </div>
 
     <!-- Visual 31-Space Susu Book Grid -->
