@@ -14,49 +14,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     require_admin();
     
     $customerId = (int)($_POST['customer_id'] ?? 0);
+    $accountNumber = trim($_POST['account_number'] ?? '');
     $fullName = trim($_POST['full_name'] ?? '');
     $phone = trim($_POST['phone'] ?? '');
     $location = trim($_POST['location'] ?? '');
     $collectorId = !empty($_POST['assigned_collector_id']) ? (int)$_POST['assigned_collector_id'] : null;
     $newDailyAmount = isset($_POST['daily_amount']) && $_POST['daily_amount'] !== '' ? (float)$_POST['daily_amount'] : null;
 
+    $accountDigits = preg_replace('/[^0-9]/', '', $accountNumber);
     $phoneDigits = preg_replace('/[^0-9]/', '', $phone);
 
-    if ($customerId <= 0 || empty($fullName) || empty($phone)) {
-        set_flash_message('error', 'Please enter a name and phone number.');
+    if ($customerId <= 0 || empty($accountNumber) || empty($fullName) || empty($phone)) {
+        set_flash_message('error', 'Account Number, full name, and phone number are required.');
+    } elseif ($accountNumber !== $accountDigits) {
+        set_flash_message('error', 'Account Number must contain numbers only (digits 0-9).');
     } elseif ($phone !== $phoneDigits || strlen($phoneDigits) < 10 || strlen($phoneDigits) > 15) {
         set_flash_message('error', 'Phone number must contain numbers only (10 to 15 digits).');
     } else {
-        try {
-            $pdo->beginTransaction();
+        // Check for duplicate account number on other customers
+        $stmtCheck = $pdo->prepare("SELECT id, full_name FROM customers WHERE account_number = ? AND id != ? LIMIT 1");
+        $stmtCheck->execute([$accountDigits, $customerId]);
+        $existing = $stmtCheck->fetch();
 
-            // Update customer profile
-            $stmtUpd = $pdo->prepare("
-                UPDATE customers 
-                SET full_name = ?, phone = ?, location = ?, assigned_collector_id = ?
-                WHERE id = ?
-            ");
-            $stmtUpd->execute([$fullName, $phoneDigits, $location, $collectorId, $customerId]);
+        if ($existing) {
+            set_flash_message('error', "Account Number '{$accountDigits}' is already in use by '{$existing['full_name']}'. Please enter a unique Account Number.");
+        } else {
+            try {
+                $pdo->beginTransaction();
 
-            // If new daily rate provided, update active card
-            if ($newDailyAmount !== null && $newDailyAmount > 0) {
-                $stmtCardUpd = $pdo->prepare("
-                    UPDATE susu_cards 
-                    SET daily_amount = ? 
-                    WHERE customer_id = ? AND status = 'active'
+                // Update customer profile including account_number
+                $stmtUpd = $pdo->prepare("
+                    UPDATE customers 
+                    SET account_number = ?, full_name = ?, phone = ?, location = ?, assigned_collector_id = ?
+                    WHERE id = ?
                 ");
-                $stmtCardUpd->execute([$newDailyAmount, $customerId]);
-            }
+                $stmtUpd->execute([$accountDigits, $fullName, $phoneDigits, $location, $collectorId, $customerId]);
 
-            $pdo->commit();
-            set_flash_message('success', 'Customer updated successfully.');
-            header('Location: customers.php' . (isset($_GET['page']) ? '?page=' . (int)$_GET['page'] : ''));
-            exit;
-        } catch (Exception $e) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
+                // If new daily rate provided, update active card
+                if ($newDailyAmount !== null && $newDailyAmount > 0) {
+                    $stmtCardUpd = $pdo->prepare("
+                        UPDATE susu_cards 
+                        SET daily_amount = ? 
+                        WHERE customer_id = ? AND status = 'active'
+                    ");
+                    $stmtCardUpd->execute([$newDailyAmount, $customerId]);
+                }
+
+                $pdo->commit();
+                set_flash_message('success', 'Customer profile and Account Number updated successfully.');
+                header('Location: customers.php' . (isset($_GET['page']) ? '?page=' . (int)$_GET['page'] : ''));
+                exit;
+            } catch (Exception $e) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                set_flash_message('error', 'Database error: ' . $e->getMessage());
             }
-            set_flash_message('error', 'Could not update customer. Please try again.');
         }
     }
 }
@@ -449,13 +462,27 @@ window.eyramConfig = {
             <!-- Step 1: Input Fields -->
             <div id="edit_fields_step" class="p-5 sm:p-6 space-y-4 text-xs">
                 
-                <!-- Account Number Display -->
-                <div class="bg-platinum-800 p-3 rounded-xl border border-silver-600/70 flex items-center justify-between">
-                    <div>
-                        <span class="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Account Number</span>
-                        <div class="font-black text-steel_azure text-sm font-mono" id="edit_account_display">-</div>
+                <!-- Account Number & Active Card Info -->
+                <div class="bg-platinum-800 p-3 rounded-xl border border-silver-600/70 flex items-center justify-between gap-4">
+                    <div class="flex-1">
+                        <label for="edit_account_number" class="block text-slate-600 font-bold uppercase text-[10px] tracking-wider mb-1">
+                            Account Number * <span class="text-[10px] text-slate-400 font-normal lowercase">(numbers only)</span>
+                        </label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                                <i class="fa-solid fa-hashtag text-xs"></i>
+                            </span>
+                            <input type="text" id="edit_account_number" name="account_number" required
+                                   inputmode="numeric"
+                                   pattern="[0-9]+"
+                                   maxlength="20"
+                                   oninput="this.value = this.value.replace(/[^0-9]/g, '')"
+                                   onkeypress="return event.charCode >= 48 && event.charCode <= 57"
+                                   class="w-full pl-8 pr-3 py-1.5 rounded-lg border border-silver-600 focus:border-steel_azure focus:ring-1 focus:ring-steel_azure outline-none font-black text-steel_azure text-sm font-mono bg-white transition"
+                                   placeholder="e.g. 0021">
+                        </div>
                     </div>
-                    <div id="edit_card_info_badge" class="hidden text-right">
+                    <div id="edit_card_info_badge" class="hidden text-right flex-shrink-0">
                         <span class="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Active Card</span>
                         <div class="font-black text-emerald-700 text-xs" id="edit_card_display">-</div>
                     </div>
@@ -541,12 +568,16 @@ window.eyramConfig = {
                 <!-- Review Card -->
                 <div class="bg-platinum-800 p-4 rounded-xl border border-silver-600 space-y-2.5">
                     <div class="flex items-center justify-between">
+                        <span class="text-slate-500 font-semibold">Account Number:</span>
+                        <span class="font-bold font-mono text-steel_azure" id="confirm_account">-</span>
+                    </div>
+                    <div class="flex items-center justify-between">
                         <span class="text-slate-500 font-semibold">Customer:</span>
                         <span class="font-extrabold text-slate-800" id="confirm_name">-</span>
                     </div>
                     <div class="flex items-center justify-between">
                         <span class="text-slate-500 font-semibold">Phone:</span>
-                        <span class="font-bold text-slate-800" id="confirm_phone">-</span>
+                        <span class="font-bold text-slate-800 font-mono" id="confirm_phone">-</span>
                     </div>
                     <div class="flex items-center justify-between">
                         <span class="text-slate-500 font-semibold">Location:</span>
@@ -581,10 +612,13 @@ window.eyramConfig = {
 
 <script>
 let currentOriginalRate = 0;
+let originalAccountNumber = '';
 
 function openEditCustomerModal(data) {
     document.getElementById('edit_customer_id').value = data.id;
-    document.getElementById('edit_account_display').textContent = data.account_number;
+    originalAccountNumber = data.account_number || '';
+    const accInput = document.getElementById('edit_account_number');
+    if (accInput) accInput.value = data.account_number || '';
     document.getElementById('edit_full_name').value = data.full_name || '';
     document.getElementById('edit_phone').value = data.phone || '';
     document.getElementById('edit_location').value = data.location || '';
@@ -633,6 +667,10 @@ function closeEditCustomerModal() {
 }
 
 function goToConfirmationStep() {
+    const accInput = document.getElementById('edit_account_number');
+    const accountNum = accInput ? accInput.value.trim().replace(/[^0-9]/g, '') : '';
+    if (accInput) accInput.value = accountNum;
+
     const name = document.getElementById('edit_full_name').value.trim();
     const phoneInput = document.getElementById('edit_phone');
     const phone = phoneInput.value.trim().replace(/[^0-9]/g, '');
@@ -642,6 +680,10 @@ function goToConfirmationStep() {
     const collectorText = collectorSelect.options[collectorSelect.selectedIndex]?.text || 'Unassigned';
     const newRate = parseFloat(document.getElementById('edit_daily_amount').value) || 0;
 
+    if (!accountNum) {
+        alert('Please enter an Account Number (numbers only).');
+        return;
+    }
     if (!name) {
         alert('Please enter customer full name.');
         return;
@@ -652,6 +694,14 @@ function goToConfirmationStep() {
     }
 
     // Populate confirmation fields
+    const confirmAccount = document.getElementById('confirm_account');
+    if (confirmAccount) {
+        if (originalAccountNumber && originalAccountNumber !== accountNum) {
+            confirmAccount.innerHTML = `<span class="text-slate-400 line-through mr-1.5 font-mono">${originalAccountNumber}</span> <span class="text-pumpkin_spice font-black font-mono">#${accountNum}</span>`;
+        } else {
+            confirmAccount.textContent = '#' + accountNum;
+        }
+    }
     document.getElementById('confirm_name').textContent = name;
     document.getElementById('confirm_phone').textContent = phone;
     document.getElementById('confirm_location').textContent = location;

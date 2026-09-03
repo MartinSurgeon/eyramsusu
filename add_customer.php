@@ -33,11 +33,14 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     $collectorId = !empty($_POST['assigned_collector_id']) ? (int)$_POST['assigned_collector_id'] : null;
     $dailyAmount = (float)($_POST['daily_amount'] ?? 0);
 
-    // Sanitize phone (numbers only)
+    // Sanitize account number and phone (numbers only)
+    $accountDigits = preg_replace('/[^0-9]/', '', $accountNumber);
     $phoneDigits = preg_replace('/[^0-9]/', '', $phone);
 
     if (empty($accountNumber)) {
-        $error = 'Customer ID / Account Number is required.';
+        $error = 'Account Number is required.';
+    } elseif ($accountNumber !== $accountDigits) {
+        $error = 'Account Number must contain numbers only (digits 0-9).';
     } elseif (empty($fullName)) {
         $error = 'Customer full name is required.';
     } elseif (empty($phone) || $phone !== $phoneDigits) {
@@ -49,21 +52,21 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     } else {
         // Check for duplicate account number
         $stmtCheck = $pdo->prepare("SELECT id, full_name FROM customers WHERE account_number = ? LIMIT 1");
-        $stmtCheck->execute([$accountNumber]);
+        $stmtCheck->execute([$accountDigits]);
         $existing = $stmtCheck->fetch();
 
         if ($existing) {
-            $error = "Customer ID '{$accountNumber}' is already in use by '{$existing['full_name']}'. Please enter a unique ID.";
+            $error = "Account Number '{$accountDigits}' is already in use by '{$existing['full_name']}'. Please enter a unique Account Number.";
         } else {
             try {
                 $pdo->beginTransaction();
 
-                // Insert Customer with manual ID
+                // Insert Customer with manual Account Number
                 $stmt = $pdo->prepare("
                     INSERT INTO customers (account_number, full_name, phone, location, assigned_collector_id, change_balance) 
                     VALUES (?, ?, ?, ?, ?, 0.00)
                 ");
-                $stmt->execute([$accountNumber, $fullName, $phoneDigits, $location, $collectorId]);
+                $stmt->execute([$accountDigits, $fullName, $phoneDigits, $location, $collectorId]);
                 $customerId = $pdo->lastInsertId();
 
                 // Create initial 31-Space Susu Card
@@ -79,14 +82,14 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
                         $collectorId,
                         'customer_assigned',
                         "New Client Assigned",
-                        "New customer '{$fullName}' ({$accountNumber}) was assigned to your collection route.",
+                        "New customer '{$fullName}' (Account #{$accountDigits}) was assigned to your collection route.",
                         "collector_dashboard.php"
                     );
                 }
 
                 $pdo->commit();
 
-                set_flash_message('success', "Customer '{$fullName}' registered successfully with ID #{$accountNumber}!");
+                set_flash_message('success', "Customer '{$fullName}' registered successfully with Account #{$accountDigits}!");
                 header("Location: view_card.php?id={$cardId}");
                 exit;
             } catch (Exception $e) {
@@ -167,19 +170,24 @@ require_once __DIR__ . '/includes/header.php';
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label for="account_number" class="block text-xs font-bold text-slate-700 mb-1">
-                            Customer ID / Account Number <span class="text-red-500">*</span>
+                            Account Number <span class="text-red-500">*</span>
+                            <span class="text-[10px] text-slate-400 font-normal ml-1">(Numbers only)</span>
                         </label>
                         <div class="relative">
                             <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
                                 <i class="fa-solid fa-hashtag text-xs"></i>
                             </span>
                             <input type="text" id="account_number" name="account_number" required autofocus
+                                   inputmode="numeric"
+                                   pattern="[0-9]+"
+                                   maxlength="20"
+                                   oninput="this.value = this.value.replace(/[^0-9]/g, ''); updateReviewSummary();"
+                                   onkeypress="return event.charCode >= 48 && event.charCode <= 57"
                                    value="<?= htmlspecialchars($_POST['account_number'] ?? $suggestedId) ?>"
-                                   oninput="updateReviewSummary()"
                                    class="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-silver-600 focus:border-steel_azure focus:ring-2 focus:ring-cornflower_ocean-800 outline-none text-xs sm:text-sm font-mono font-bold text-steel_azure transition"
-                                   placeholder="e.g. 0035, 0044, or CUST-01">
+                                   placeholder="e.g. 0021, 0035, 0044">
                         </div>
-                        <p class="text-[10px] text-slate-400 mt-1">Manual passbook booklet number or custom ID.</p>
+                        <p class="text-[10px] text-slate-400 mt-1">Passbook booklet account number (numbers only).</p>
                     </div>
 
                     <div>
@@ -324,7 +332,7 @@ require_once __DIR__ . '/includes/header.php';
                 <div class="text-xs font-black uppercase text-slate-400 tracking-wider">Registration Summary</div>
                 <div class="grid grid-cols-2 gap-3 text-xs">
                     <div>
-                        <span class="text-slate-400 font-medium">Customer ID:</span>
+                        <span class="text-slate-400 font-medium">Account Number:</span>
                         <div id="summary_account" class="font-mono font-bold text-steel_azure truncate">—</div>
                     </div>
                     <div>
@@ -397,10 +405,15 @@ function validateAndGoToStep(targetStep) {
 
         let valid = true;
 
-        if (!accountField.value.trim()) {
+        const rawAccount = accountField.value.trim();
+        const accountDigits = rawAccount.replace(/[^0-9]/g, '');
+        accountField.value = accountDigits;
+
+        if (!accountDigits) {
             accountField.classList.add('field-error', 'field-shake');
             valid = false;
             setTimeout(() => accountField.classList.remove('field-shake'), 400);
+            alert('Please enter an Account Number (numbers only).');
         } else {
             accountField.classList.remove('field-error');
         }
