@@ -160,8 +160,12 @@ require_once __DIR__ . '/includes/header.php';
             </p>
         </div>
 
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2.5">
             <?php if ($user['role'] === 'admin'): ?>
+                <a href="export_customers.php" class="btn-touch px-3.5 py-2.5 bg-white hover:bg-platinum-800 text-steel_azure border border-steel_azure text-xs sm:text-sm font-bold rounded-xl shadow-2xs transition inline-flex items-center gap-1.5" title="Download Customer List as Excel-compatible CSV">
+                    <i class="fa-solid fa-file-csv text-emerald-600 text-base"></i>
+                    <span>Export CSV</span>
+                </a>
                 <a href="add_customer.php" class="btn-touch bg-steel_azure hover:bg-steel_azure-400 text-white text-xs sm:text-sm shadow-sm transition flex items-center gap-1.5">
                     <i class="fa-solid fa-user-plus text-xs"></i>
                     <span>Register New Customer</span>

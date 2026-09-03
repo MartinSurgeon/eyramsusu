@@ -103,6 +103,13 @@ require_once __DIR__ . '/includes/header.php';
                 <i class="fa-solid fa-print text-xs"></i>
                 <span>Print Sheet</span>
             </button>
+
+            <?php if ($user['role'] === 'admin'): ?>
+                <a href="export_customers.php" class="btn-touch bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold px-3 py-2 shadow-2xs rounded-xl flex items-center gap-1.5 transition" title="Export Customer List to CSV">
+                    <i class="fa-solid fa-file-csv text-emerald-600 text-sm"></i>
+                    <span>Export Clients CSV</span>
+                </a>
+            <?php endif; ?>
         </form>
     </div>
 
