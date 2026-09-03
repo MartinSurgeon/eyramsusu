@@ -11,10 +11,18 @@ $error = '';
 
 $selectedCustomerId = isset($_GET['customer_id']) ? (int)$_GET['customer_id'] : 0;
 
+function get_client_initials($name) {
+    $parts = preg_split('/\s+/', trim($name));
+    if (count($parts) >= 2) {
+        return strtoupper(substr($parts[0], 0, 1) . substr(end($parts), 0, 1));
+    }
+    return strtoupper(substr($name, 0, 2));
+}
+
 // Fetch customers list for selection
 if ($user['role'] === 'collector') {
     $stmtCust = $pdo->prepare("
-        SELECT c.id, c.full_name, c.account_number, c.location, c.change_balance,
+        SELECT c.id, c.full_name, c.account_number, c.phone, c.location, c.change_balance,
                sc.id as card_id, sc.card_number, sc.daily_amount, sc.spaces_filled, sc.total_spaces, sc.total_saved
         FROM customers c
         LEFT JOIN susu_cards sc ON c.id = sc.customer_id AND sc.status = 'active'
@@ -24,7 +32,7 @@ if ($user['role'] === 'collector') {
     $stmtCust->execute([$user['id']]);
 } else {
     $stmtCust = $pdo->query("
-        SELECT c.id, c.full_name, c.account_number, c.location, c.change_balance,
+        SELECT c.id, c.full_name, c.account_number, c.phone, c.location, c.change_balance,
                sc.id as card_id, sc.card_number, sc.daily_amount, sc.spaces_filled, sc.total_spaces, sc.total_saved
         FROM customers c
         LEFT JOIN susu_cards sc ON c.id = sc.customer_id AND sc.status = 'active'
@@ -174,22 +182,140 @@ require_once __DIR__ . '/includes/header.php';
     <!-- Main Deposit Entry Form -->
     <form method="POST" action="record_deposit.php" class="bg-white rounded-2xl border-2 border-silver-600 shadow-md p-6 space-y-6">
         
-        <!-- Customer Selection -->
+        <!-- Customer Selection (HCI: Fitts's Law, Hick's Law, Miller's Law) -->
         <div>
-            <label for="customer_select" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                1. Select Client *
-            </label>
-            <select id="customer_select" name="customer_id" required onchange="window.location.href='record_deposit.php?customer_id=' + this.value"
-                    class="w-full px-3.5 py-3 rounded-xl border border-silver-600 focus:border-steel_azure focus:ring-2 focus:ring-cornflower_ocean-800 outline-none text-xs sm:text-sm font-semibold text-slate-800 transition bg-white">
-                <option value="">-- Choose Customer --</option>
-                <?php foreach ($customers as $c): ?>
-                    <option value="<?= $c['id'] ?>" <?= ($activeCustomer && (int)$activeCustomer['id'] === (int)$c['id']) ? 'selected' : '' ?>>
-                        <?= htmlspecialchars($c['full_name']) ?> (<?= htmlspecialchars($c['account_number']) ?>) &bull; <?= format_money($c['daily_amount']) ?> / space
-                        <?= $c['card_id'] ? " [{$c['spaces_filled']}/31 spaces]" : " [No Active Card]" ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
-            <p class="helper-text">Select the client who handed you cash for their susu contribution.</p>
+            <div class="flex items-center justify-between mb-2">
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    1. Select Client *
+                </label>
+                <?php if ($activeCustomer): ?>
+                    <button type="button" onclick="toggleClientPicker()" class="text-xs font-extrabold text-steel_azure hover:text-steel_azure-400 inline-flex items-center gap-1.5 transition cursor-pointer">
+                        <i class="fa-solid fa-arrows-rotate text-[11px]"></i>
+                        <span>Change Client</span>
+                    </button>
+                <?php endif; ?>
+            </div>
+
+            <!-- Hidden input for form POST -->
+            <input type="hidden" id="customer_select" name="customer_id" value="<?= $activeCustomer ? $activeCustomer['id'] : '' ?>" required>
+
+            <?php if ($activeCustomer): ?>
+                <!-- Selected Client Banner Card (Gestalt Proximity & Visual Confirmation) -->
+                <div id="selected_client_card" class="bg-gradient-to-r from-blue-50/80 via-platinum-800 to-white p-3.5 sm:p-4 rounded-2xl border-2 border-steel_azure/30 shadow-2xs flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <!-- Initials Badge -->
+                        <div class="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-steel_azure to-cornflower_ocean text-white font-black text-sm sm:text-base flex items-center justify-center shadow-xs flex-shrink-0 font-heading">
+                            <?= htmlspecialchars(get_client_initials($activeCustomer['full_name'])) ?>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <h3 class="font-black text-sm sm:text-base text-slate-800 truncate">
+                                    <?= htmlspecialchars($activeCustomer['full_name']) ?>
+                                </h3>
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-steel_azure/10 text-steel_azure border border-steel_azure/20">
+                                    #<?= htmlspecialchars($activeCustomer['account_number']) ?>
+                                </span>
+                            </div>
+                            <div class="text-[11px] text-slate-500 flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5 font-medium">
+                                <?php if (!empty($activeCustomer['phone'])): ?>
+                                    <span class="inline-flex items-center gap-1">
+                                        <i class="fa-solid fa-phone text-[10px] text-slate-400"></i>
+                                        <?= htmlspecialchars($activeCustomer['phone']) ?>
+                                    </span>
+                                <?php endif; ?>
+                                <?php if (!empty($activeCustomer['location'])): ?>
+                                    <span class="inline-flex items-center gap-1">
+                                        <i class="fa-solid fa-location-dot text-[10px] text-slate-400"></i>
+                                        <?= htmlspecialchars($activeCustomer['location']) ?>
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col items-end flex-shrink-0">
+                        <span class="px-2.5 py-1 rounded-xl text-xs font-black bg-steel_azure text-white shadow-2xs">
+                            <?= format_money($activeCustomer['daily_amount']) ?> <span class="text-[10px] font-normal opacity-80">/ space</span>
+                        </span>
+                        <button type="button" onclick="toggleClientPicker()" class="text-[11px] font-bold text-slate-500 hover:text-steel_azure mt-1.5 inline-flex items-center gap-1 cursor-pointer">
+                            <i class="fa-solid fa-pen text-[9px]"></i>
+                            <span>Change</span>
+                        </button>
+                    </div>
+                </div>
+            <?php endif; ?>
+
+            <!-- Searchable Client Combobox Picker -->
+            <div id="client_picker_container" class="<?= $activeCustomer ? 'hidden' : '' ?> mt-2 bg-white rounded-2xl border-2 border-silver-600 shadow-sm overflow-hidden p-3.5 space-y-3">
+                
+                <!-- Instant Search Input Box -->
+                <div class="relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input type="text" id="client_picker_search" 
+                           placeholder="Type customer name, account number, or location..."
+                           class="w-full pl-9 pr-8 py-2.5 rounded-xl border border-silver-600 focus:border-steel_azure focus:ring-2 focus:ring-cornflower_ocean-800 outline-none text-xs sm:text-sm font-semibold text-slate-800 transition">
+                    <button type="button" id="client_picker_clear" onclick="clearClientSearch()" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs" title="Clear">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <div class="text-[10px] sm:text-[11px] text-slate-400 font-bold px-1 flex items-center justify-between uppercase tracking-wider">
+                    <span>Available Clients (<?= count($customers) ?>)</span>
+                    <span class="text-steel_azure font-semibold normal-case hidden sm:inline">Tap a client to select</span>
+                </div>
+
+                <!-- Scrollable Client Cards List (Miller's Law & Fitts's Law Touch Targets) -->
+                <div class="max-h-64 overflow-y-auto space-y-2 pr-1" id="client_picker_list">
+                    <?php foreach ($customers as $c): ?>
+                        <div class="client-picker-item group p-3 rounded-xl border border-silver-600/80 hover:border-steel_azure bg-white hover:bg-platinum-800 cursor-pointer transition flex items-center justify-between gap-3 shadow-2xs"
+                             data-id="<?= $c['id'] ?>"
+                             data-search="<?= htmlspecialchars(strtolower($c['full_name'] . ' ' . $c['account_number'] . ' ' . ($c['phone'] ?? '') . ' ' . ($c['location'] ?? ''))) ?>"
+                             onclick="selectClient(<?= $c['id'] ?>)">
+                            
+                            <div class="flex items-center gap-3 min-w-0">
+                                <div class="w-9 h-9 rounded-xl bg-slate-100 group-hover:bg-steel_azure group-hover:text-white text-steel_azure font-black text-xs flex items-center justify-center transition-colors flex-shrink-0 font-heading">
+                                    <?= htmlspecialchars(get_client_initials($c['full_name'])) ?>
+                                </div>
+                                <div class="min-w-0">
+                                    <div class="flex items-center gap-1.5 flex-wrap">
+                                        <span class="font-black text-xs sm:text-sm text-slate-800 group-hover:text-steel_azure transition">
+                                            <?= htmlspecialchars($c['full_name']) ?>
+                                        </span>
+                                        <span class="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-slate-100 text-slate-600 border border-silver-600/50">
+                                            #<?= htmlspecialchars($c['account_number']) ?>
+                                        </span>
+                                    </div>
+                                    <div class="text-[11px] text-slate-400 truncate mt-0.5">
+                                        <?= htmlspecialchars($c['location'] ?: 'Adaklu Waya') ?>
+                                        <?php if (!empty($c['phone'])): ?> &bull; <?= htmlspecialchars($c['phone']) ?><?php endif; ?>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="text-right flex-shrink-0">
+                                <div class="font-extrabold text-xs text-steel_azure">
+                                    <?= format_money($c['daily_amount']) ?> <span class="text-[10px] text-slate-400 font-normal">/ space</span>
+                                </div>
+                                <div class="text-[10px] font-semibold mt-0.5">
+                                    <?php if ($c['card_id']): ?>
+                                        <span class="text-emerald-700"><?= $c['spaces_filled'] ?>/31 spaces</span>
+                                    <?php else: ?>
+                                        <span class="text-amber-700">No Active Card</span>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+
+                        </div>
+                    <?php endforeach; ?>
+
+                    <div id="client_picker_empty" class="hidden py-8 text-center text-xs text-slate-400">
+                        <i class="fa-solid fa-magnifying-glass text-2xl text-slate-300 mb-2"></i>
+                        <p class="font-bold text-slate-600">No matching clients found</p>
+                        <p class="text-[11px] mt-0.5">Try typing a different name, phone, or account number.</p>
+                    </div>
+                </div>
+
+            </div>
         </div>
 
         <?php if ($activeCustomer): ?>
@@ -335,5 +461,83 @@ require_once __DIR__ . '/includes/header.php';
     </form>
 
 </div>
+
+<script>
+function toggleClientPicker() {
+    const container = document.getElementById('client_picker_container');
+    const searchInput = document.getElementById('client_picker_search');
+    if (!container) return;
+
+    if (container.classList.contains('hidden')) {
+        container.classList.remove('hidden');
+        if (searchInput) {
+            searchInput.focus();
+        }
+    } else {
+        container.classList.add('hidden');
+    }
+}
+
+function selectClient(customerId) {
+    if (!customerId) return;
+    window.location.href = 'record_deposit.php?customer_id=' + customerId;
+}
+
+function clearClientSearch() {
+    const searchInput = document.getElementById('client_picker_search');
+    const clearBtn = document.getElementById('client_picker_clear');
+    if (searchInput) {
+        searchInput.value = '';
+        searchInput.focus();
+        filterClients('');
+    }
+    if (clearBtn) {
+        clearBtn.classList.add('hidden');
+    }
+}
+
+function filterClients(query) {
+    const q = query.trim().toLowerCase();
+    const items = document.querySelectorAll('.client-picker-item');
+    const emptyNotice = document.getElementById('client_picker_empty');
+    const clearBtn = document.getElementById('client_picker_clear');
+    let visibleCount = 0;
+
+    if (clearBtn) {
+        if (q.length > 0) {
+            clearBtn.classList.remove('hidden');
+        } else {
+            clearBtn.classList.add('hidden');
+        }
+    }
+
+    items.forEach(item => {
+        const searchText = item.getAttribute('data-search') || '';
+        if (!q || searchText.includes(q)) {
+            item.classList.remove('hidden');
+            visibleCount++;
+        } else {
+            item.classList.add('hidden');
+        }
+    });
+
+    if (emptyNotice) {
+        if (visibleCount === 0) {
+            emptyNotice.classList.remove('hidden');
+        } else {
+            emptyNotice.classList.add('hidden');
+        }
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('client_picker_search');
+    if (searchInput) {
+        searchInput.addEventListener('input', function(e) {
+            filterClients(e.target.value);
+        });
+    }
+});
+</script>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
