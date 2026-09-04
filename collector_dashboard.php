@@ -212,10 +212,10 @@ require_once __DIR__ . '/includes/header.php';
 <!-- ============================================================
      ALERT ADMIN CONFIRMATION MODAL (HCI & Jakob's Law)
      ============================================================ -->
-<div id="alert_admin_modal" class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm hidden" role="dialog" aria-modal="true" aria-labelledby="alert_modal_title">
-    <div class="bg-white rounded-2xl border border-silver-600 shadow-2xl max-w-md w-full overflow-hidden transform transition-all scale-95 duration-200 my-auto" id="alert_admin_modal_box">
+<div id="alert_admin_modal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-sm hidden" role="dialog" aria-modal="true" aria-labelledby="alert_modal_title">
+    <div class="bg-white rounded-2xl border border-silver-600 shadow-2xl max-w-md w-full overflow-hidden transform transition-all scale-95 duration-200 my-auto max-h-[90vh] flex flex-col" id="alert_admin_modal_box">
         <!-- Header -->
-        <div class="p-4 sm:p-5 bg-gradient-to-r from-steel_azure to-steel_azure-400 text-white flex items-center justify-between">
+        <div class="p-4 sm:p-5 bg-gradient-to-r from-steel_azure to-steel_azure-400 text-white flex items-center justify-between flex-shrink-0">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
                     <i class="fa-solid fa-bell text-base"></i>
@@ -230,7 +230,7 @@ require_once __DIR__ . '/includes/header.php';
             </button>
         </div>
 
-        <div class="p-5 sm:p-6 space-y-4">
+        <div class="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1">
             <!-- Customer Identity Summary Card -->
             <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex items-center gap-3">
                 <div class="w-10 h-10 rounded-xl bg-steel_azure text-white font-black flex items-center justify-center text-sm flex-shrink-0 shadow-xs" id="modal_cust_avatar">
@@ -272,12 +272,12 @@ require_once __DIR__ . '/includes/header.php';
                 <i class="fa-solid fa-circle-check text-emerald-600 text-base flex-shrink-0"></i>
                 <span>Notification sent! The office administrator has been alerted in real time.</span>
             </div>
+        </div>
 
-            <div class="pt-3 border-t border-silver-600 flex items-center justify-end">
-                <button type="button" onclick="closeCardAlertModal()" class="btn-touch bg-white text-slate-600 border border-silver-600 hover:bg-slate-50 text-xs font-bold px-4 py-2 rounded-xl transition">
-                    Dismiss
-                </button>
-            </div>
+        <div class="p-4 border-t border-silver-600 flex items-center justify-end bg-slate-50/70 flex-shrink-0">
+            <button type="button" onclick="closeCardAlertModal()" class="btn-touch bg-white text-slate-600 border border-silver-600 hover:bg-slate-100 text-xs font-bold px-4 py-2 rounded-xl transition">
+                Dismiss
+            </button>
         </div>
     </div>
 </div>
@@ -312,8 +312,16 @@ function openCardAlertModal(cust) {
     btnText.textContent = 'Send In-App Alert to Admin';
     feedback.classList.add('hidden');
 
-    // Show modal with animation
+    // Ensure modal is attached directly to document.body to prevent any container/scroll traps
     const modal = document.getElementById('alert_admin_modal');
+    if (modal.parentElement !== document.body) {
+        document.body.appendChild(modal);
+    }
+
+    // Lock body scroll
+    document.body.classList.add('overflow-hidden');
+
+    // Show modal with smooth scale animation
     const box = document.getElementById('alert_admin_modal_box');
     modal.classList.remove('hidden');
     setTimeout(() => {
@@ -326,6 +334,8 @@ function closeCardAlertModal() {
     const modal = document.getElementById('alert_admin_modal');
     const box = document.getElementById('alert_admin_modal_box');
     if (!modal) return;
+    
+    document.body.classList.remove('overflow-hidden');
     box.classList.remove('scale-100');
     box.classList.add('scale-95');
     setTimeout(() => {
