@@ -415,14 +415,12 @@ function initCustomerFilter() {
                 `;
             } else if (userRole === 'admin') {
                 actionsHtml += `
-                    <form method="POST" action="start_new_card.php" class="inline">
-                        <input type="hidden" name="customer_id" value="${c.id}">
-                        <input type="hidden" name="daily_amount" value="${c.daily_amount > 0 ? c.daily_amount : 20.00}">
-                        <button type="submit" class="btn-touch px-3 py-1.5 bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold rounded-xl shadow-2xs transition inline-flex items-center gap-1.5 cursor-pointer">
-                            <i class="fa-solid fa-circle-plus text-xs"></i>
-                            <span>+ Open Card</span>
-                        </button>
-                    </form>
+                    <button type="button"
+                        onclick="openNewCardModal(${c.id}, ${JSON.stringify(c.full_name)}, ${JSON.stringify(c.account_number)}, ${JSON.stringify(c.collector_name || 'Unassigned')}, ${c.daily_amount > 0 ? c.daily_amount : 20.00})"
+                        class="btn-touch px-3 py-1.5 bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold rounded-xl shadow-2xs transition inline-flex items-center gap-1.5 cursor-pointer">
+                        <i class="fa-solid fa-circle-plus text-xs"></i>
+                        <span>+ Open Card</span>
+                    </button>
                 `;
             }
 
@@ -535,14 +533,12 @@ function initCustomerFilter() {
                 `;
             } else if (userRole === 'admin') {
                 mobileActions += `
-                    <form method="POST" action="start_new_card.php" class="flex-1">
-                        <input type="hidden" name="customer_id" value="${c.id}">
-                        <input type="hidden" name="daily_amount" value="${c.daily_amount > 0 ? c.daily_amount : 20.00}">
-                        <button type="submit" class="w-full btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer">
-                            <i class="fa-solid fa-circle-plus text-xs"></i>
-                            <span>+ Open Susu Card</span>
-                        </button>
-                    </form>
+                    <button type="button"
+                        onclick="openNewCardModal(${c.id}, ${JSON.stringify(c.full_name)}, ${JSON.stringify(c.account_number)}, ${JSON.stringify(c.collector_name || 'Unassigned')}, ${c.daily_amount > 0 ? c.daily_amount : 20.00})"
+                        class="flex-1 btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer">
+                        <i class="fa-solid fa-circle-plus text-xs"></i>
+                        <span>+ Open Susu Card</span>
+                    </button>
                 `;
             }
 
@@ -849,6 +845,54 @@ function initNotificationCenter() {
                     }
                 }).catch(() => {});
         });
+    }
+
+    // ── Clear All: Instant client-side (0ms) + background DB sync (Approach B) ──
+    const clearAllBtn = document.getElementById('clear_all_notifications_btn');
+    if (clearAllBtn) {
+        clearAllBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            // 1. Instant UI clear
+            const notifList = document.getElementById('notification_list');
+            if (notifList) {
+                notifList.innerHTML = `
+                    <div class="p-6 text-center" id="notifications_cleared_state">
+                        <div class="text-2xl mb-2">✨</div>
+                        <div class="text-xs font-bold text-slate-700">All caught up!</div>
+                        <div class="text-[11px] text-slate-400 mt-1">No active alerts.</div>
+                    </div>
+                `;
+            }
+
+            // 2. Instantly zero the badge + drawer count
+            updateBadge(0);
+
+            // 3. Hide header buttons (no more unread actions needed)
+            if (markAllBtn) markAllBtn.remove();
+            clearAllBtn.remove();
+
+            // 4. Persist in sessionStorage — prevents re-showing on same-session page navigations
+            try { sessionStorage.setItem('eyram_notifs_cleared', Date.now()); } catch(e) {}
+
+            // 5. Silent background sync to mark all read in DB (non-blocking)
+            const fd = new FormData();
+            fd.append('action', 'mark_all_read');
+            fetch('api_notifications.php', { method: 'POST', body: fd }).catch(() => {});
+        });
+    }
+
+    // ── Re-apply cleared state if user navigated away and back in same session ──
+    if (sessionStorage.getItem('eyram_notifs_cleared')) {
+        const notifList = document.getElementById('notification_list');
+        const badge = document.getElementById('notification_unread_badge');
+        if (badge) badge.classList.add('hidden');
+        // Only replace if there are unread items showing (avoid overwriting empty state)
+        const unreadItems = notifList ? notifList.querySelectorAll('.notification-item.unread') : [];
+        if (unreadItems.length > 0 && notifList) {
+            unreadItems.forEach(item => item.classList.remove('unread'));
+        }
     }
 
     function updateBadge(count) {

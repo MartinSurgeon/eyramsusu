@@ -27,10 +27,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($user && password_verify($password, $user['password_hash'])) {
             login_user($user);
+            log_audit_event((int)$user['id'], 'login', "Successful login: {$user['full_name']} ({$user['role']})");
             set_flash_message('success', 'Welcome back, ' . $user['full_name'] . '!');
             header('Location: ' . ($user['role'] === 'admin' ? 'admin_dashboard.php' : 'collector_dashboard.php'));
             exit;
         } else {
+            $maskedUser = substr($username, 0, 2) . str_repeat('*', max(0, strlen($username) - 2));
+            log_audit_event(null, 'failed_login', "Failed login attempt for username: {$maskedUser}");
             $error = 'Invalid username or password. Please try again.';
         }
     }

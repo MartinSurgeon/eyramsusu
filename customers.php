@@ -418,14 +418,12 @@ require_once __DIR__ . '/includes/header.php';
                                                 <span>Card</span>
                                             </a>
                                         <?php elseif ($user['role'] === 'admin'): ?>
-                                            <form method="POST" action="start_new_card.php" class="inline">
-                                                <input type="hidden" name="customer_id" value="<?= $c['id'] ?>">
-                                                <input type="hidden" name="daily_amount" value="<?= $c['daily_amount'] > 0 ? $c['daily_amount'] : 20.00 ?>">
-                                                <button type="submit" class="btn-touch px-3 py-1.5 bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold rounded-xl shadow-2xs transition inline-flex items-center gap-1.5 cursor-pointer">
-                                                    <i class="fa-solid fa-circle-plus text-xs"></i>
-                                                    <span>+ Open Card</span>
-                                                </button>
-                                            </form>
+                                            <button type="button"
+                                                    onclick="openNewCardModal(<?= $c['id'] ?>, <?= htmlspecialchars(json_encode($c['full_name']), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars(json_encode($c['account_number']), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars(json_encode($c['collector_name'] ?: 'Unassigned'), ENT_QUOTES, 'UTF-8') ?>, <?= (float)($c['daily_amount'] > 0 ? $c['daily_amount'] : 20.00) ?>)"
+                                                    class="btn-touch px-3 py-1.5 bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold rounded-xl shadow-2xs transition inline-flex items-center gap-1.5 cursor-pointer">
+                                                <i class="fa-solid fa-circle-plus text-xs"></i>
+                                                <span>+ Open Card</span>
+                                            </button>
                                         <?php endif; ?>
 
                                         <?php if ($user['role'] === 'admin'): ?>
@@ -505,14 +503,12 @@ require_once __DIR__ . '/includes/header.php';
                                 <span>Card</span>
                             </a>
                         <?php elseif ($user['role'] === 'admin'): ?>
-                            <form method="POST" action="start_new_card.php" class="flex-1">
-                                <input type="hidden" name="customer_id" value="<?= $c['id'] ?>">
-                                <input type="hidden" name="daily_amount" value="<?= $c['daily_amount'] > 0 ? $c['daily_amount'] : 20.00 ?>">
-                                <button type="submit" class="w-full btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer">
-                                    <i class="fa-solid fa-circle-plus text-xs"></i>
-                                    <span>+ Open Susu Card</span>
-                                </button>
-                            </form>
+                            <button type="button"
+                                    onclick="openNewCardModal(<?= $c['id'] ?>, <?= htmlspecialchars(json_encode($c['full_name']), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars(json_encode($c['account_number']), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars(json_encode($c['collector_name'] ?: 'Unassigned'), ENT_QUOTES, 'UTF-8') ?>, <?= (float)($c['daily_amount'] > 0 ? $c['daily_amount'] : 20.00) ?>)"
+                                    class="flex-1 w-full btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer">
+                                <i class="fa-solid fa-circle-plus text-xs"></i>
+                                <span>+ Open Susu Card</span>
+                            </button>
                         <?php endif; ?>
 
                         <?php if ($user['role'] === 'admin'): ?>
@@ -886,6 +882,226 @@ document.addEventListener('click', function(e) {
     const box = document.getElementById('edit_modal_box');
     if (modal && !modal.classList.contains('hidden') && e.target === modal) {
         closeEditCustomerModal();
+    }
+});
+</script>
+<?php endif; ?>
+
+<?php if ($user['role'] === 'admin'): ?>
+<!-- Open New Susu Card Confirmation Modal -->
+<div id="open_card_modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs hidden" role="dialog" aria-modal="true" aria-labelledby="open_card_modal_title">
+    <div class="bg-white rounded-2xl border border-silver-600 shadow-2xl max-w-md w-full overflow-hidden transform transition-all scale-95 duration-200" id="open_card_modal_box">
+
+        <!-- Modal Header -->
+        <div class="p-4 sm:p-5 bg-gradient-to-r from-pumpkin_spice to-pumpkin_spice-600 text-white flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+                <div class="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
+                    <i class="fa-solid fa-address-card text-base"></i>
+                </div>
+                <div>
+                    <h3 id="open_card_modal_title" class="font-extrabold text-sm leading-tight">Open New Susu Passbook</h3>
+                    <p class="text-[11px] text-white/70 mt-0.5">31-Space Savings Card</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeNewCardModal()" class="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/25 text-white flex items-center justify-center transition" title="Close">
+                <i class="fa-solid fa-xmark text-sm"></i>
+            </button>
+        </div>
+
+        <div class="p-5 sm:p-6 space-y-4">
+
+            <!-- Customer Identity Review Card -->
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-steel_azure text-white font-black flex items-center justify-center text-sm flex-shrink-0 shadow-xs" id="oc_avatar">--</div>
+                <div class="flex-1 min-w-0">
+                    <div class="text-sm font-extrabold text-slate-800 truncate" id="oc_name">-</div>
+                    <div class="text-[11px] text-slate-500 font-mono font-semibold" id="oc_account">-</div>
+                    <div class="text-[10px] text-slate-400 mt-0.5" id="oc_collector">-</div>
+                </div>
+                <span class="text-[10px] font-black text-amber-700 bg-amber-100 border border-amber-200 px-2 py-1 rounded-lg whitespace-nowrap">No Active Card</span>
+            </div>
+
+            <!-- Daily Contribution Picker -->
+            <div>
+                <label class="block text-xs font-black text-slate-700 uppercase tracking-wider mb-2.5">
+                    Daily Savings Amount (GH₵)
+                </label>
+
+                <!-- 1-Tap Quick Presets (Hick's Law & Fitts's Law) -->
+                <div class="grid grid-cols-4 gap-2 mb-3">
+                    <?php foreach ([10, 20, 50, 100] as $preset): ?>
+                        <button type="button"
+                                class="oc-preset-btn btn-touch py-2 text-xs font-extrabold rounded-xl border border-silver-600 bg-white text-slate-700 hover:border-pumpkin_spice hover:bg-orange-50 hover:text-pumpkin_spice transition"
+                                data-amount="<?= $preset ?>">
+                            GH₵ <?= $preset ?>
+                        </button>
+                    <?php endforeach; ?>
+                </div>
+
+                <!-- Custom Amount Input -->
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400 font-black text-sm">GH₵</span>
+                    <input type="number" id="oc_daily_amount" name="daily_amount"
+                           step="1" min="1" max="9999"
+                           class="w-full pl-12 pr-4 py-2.5 rounded-xl border border-silver-600 focus:border-pumpkin_spice focus:ring-1 focus:ring-pumpkin_spice outline-none text-sm font-black text-slate-800 transition"
+                           placeholder="Or type a custom amount">
+                </div>
+            </div>
+
+            <!-- Live 31-Space Target Calculator -->
+            <div id="oc_target_preview" class="hidden bg-gradient-to-r from-pumpkin_spice/10 to-orange-50 border border-pumpkin_spice/20 rounded-xl px-4 py-3 flex items-center justify-between">
+                <div>
+                    <div class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">31 Spaces × <span id="oc_preview_rate">GH₵ 0.00</span></div>
+                    <div class="text-lg font-black text-pumpkin_spice" id="oc_preview_total">GH₵ 0.00</div>
+                    <div class="text-[10px] text-slate-400 font-medium">Total Savings Target</div>
+                </div>
+                <i class="fa-solid fa-piggy-bank text-3xl text-pumpkin_spice/30"></i>
+            </div>
+
+            <!-- Action Buttons -->
+            <form id="open_card_form" method="POST" action="start_new_card.php">
+                <input type="hidden" id="oc_customer_id" name="customer_id" value="">
+                <input type="hidden" id="oc_amount_hidden" name="daily_amount" value="">
+                <div class="flex items-center gap-3 pt-1">
+                    <button type="button" onclick="closeNewCardModal()"
+                            class="flex-1 btn-touch px-4 py-2.5 bg-white text-slate-600 hover:bg-platinum-800 border border-silver-600 text-sm font-bold rounded-xl transition">
+                        Cancel
+                    </button>
+                    <button type="submit" id="oc_confirm_btn"
+                            class="flex-1 btn-touch px-4 py-2.5 bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-sm font-extrabold rounded-xl shadow-sm transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled>
+                        <i class="fa-solid fa-circle-check text-sm"></i>
+                        <span>Confirm &amp; Open Card</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function openNewCardModal(customerId, customerName, accountNumber, collectorName, defaultAmount) {
+    // Populate identity card
+    const initials = (customerName || '--').split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
+    const oc_avatar   = document.getElementById('oc_avatar');
+    const oc_name     = document.getElementById('oc_name');
+    const oc_account  = document.getElementById('oc_account');
+    const oc_collector= document.getElementById('oc_collector');
+    if (oc_avatar)    oc_avatar.textContent   = initials;
+    if (oc_name)      oc_name.textContent     = customerName;
+    if (oc_account)   oc_account.textContent  = 'A/C: ' + accountNumber;
+    if (oc_collector) oc_collector.textContent = 'Collector: ' + collectorName;
+
+    // Set hidden customer ID
+    document.getElementById('oc_customer_id').value = customerId;
+
+    // Set default daily amount
+    const amountInput = document.getElementById('oc_daily_amount');
+    if (amountInput) {
+        amountInput.value = defaultAmount > 0 ? defaultAmount : '';
+        updateOcPreset(defaultAmount);
+        updateOcPreview();
+    }
+
+    // Highlight the matching preset button (if any)
+    document.querySelectorAll('.oc-preset-btn').forEach(btn => {
+        const v = parseFloat(btn.getAttribute('data-amount'));
+        if (v === parseFloat(defaultAmount)) {
+            btn.classList.add('border-pumpkin_spice', 'bg-orange-50', 'text-pumpkin_spice');
+            btn.classList.remove('border-silver-600', 'bg-white', 'text-slate-700');
+        } else {
+            btn.classList.remove('border-pumpkin_spice', 'bg-orange-50', 'text-pumpkin_spice');
+            btn.classList.add('border-silver-600', 'bg-white', 'text-slate-700');
+        }
+    });
+
+    // Show modal
+    const modal = document.getElementById('open_card_modal');
+    const box   = document.getElementById('open_card_modal_box');
+    modal.classList.remove('hidden');
+    requestAnimationFrame(() => {
+        box.classList.remove('scale-95');
+        box.classList.add('scale-100');
+    });
+}
+
+function closeNewCardModal() {
+    const modal = document.getElementById('open_card_modal');
+    const box   = document.getElementById('open_card_modal_box');
+    if (!modal) return;
+    box.classList.remove('scale-100');
+    box.classList.add('scale-95');
+    setTimeout(() => modal.classList.add('hidden'), 150);
+}
+
+function updateOcPreset(amount) {
+    document.querySelectorAll('.oc-preset-btn').forEach(btn => {
+        const v = parseFloat(btn.getAttribute('data-amount'));
+        if (v === parseFloat(amount)) {
+            btn.classList.add('border-pumpkin_spice', 'bg-orange-50', 'text-pumpkin_spice');
+            btn.classList.remove('border-silver-600', 'bg-white', 'text-slate-700');
+        } else {
+            btn.classList.remove('border-pumpkin_spice', 'bg-orange-50', 'text-pumpkin_spice');
+            btn.classList.add('border-silver-600', 'bg-white', 'text-slate-700');
+        }
+    });
+}
+
+function updateOcPreview() {
+    const amount     = parseFloat(document.getElementById('oc_daily_amount').value) || 0;
+    const hiddenInput= document.getElementById('oc_amount_hidden');
+    const confirmBtn = document.getElementById('oc_confirm_btn');
+    const preview    = document.getElementById('oc_target_preview');
+    const previewRate= document.getElementById('oc_preview_rate');
+    const previewTotal= document.getElementById('oc_preview_total');
+
+    if (hiddenInput) hiddenInput.value = amount > 0 ? amount : '';
+
+    if (amount > 0) {
+        const total = amount * 31;
+        if (previewRate)  previewRate.textContent  = 'GH₵ ' + amount.toFixed(2);
+        if (previewTotal) previewTotal.textContent = 'GH₵ ' + total.toFixed(2);
+        if (preview)      preview.classList.remove('hidden');
+        if (confirmBtn)   confirmBtn.disabled = false;
+    } else {
+        if (preview)    preview.classList.add('hidden');
+        if (confirmBtn) confirmBtn.disabled = true;
+    }
+}
+
+// Wire up preset buttons & custom input
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.oc-preset-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const v = parseFloat(btn.getAttribute('data-amount'));
+            document.getElementById('oc_daily_amount').value = v;
+            updateOcPreset(v);
+            updateOcPreview();
+        });
+    });
+
+    const amountInput = document.getElementById('oc_daily_amount');
+    if (amountInput) {
+        amountInput.addEventListener('input', () => {
+            updateOcPreset(parseFloat(amountInput.value));
+            updateOcPreview();
+        });
+    }
+
+    // Close on Escape
+    document.addEventListener('keydown', function(e) {
+        const modal = document.getElementById('open_card_modal');
+        if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) {
+            closeNewCardModal();
+        }
+    });
+
+    // Close on backdrop click
+    const modal = document.getElementById('open_card_modal');
+    if (modal) {
+        modal.addEventListener('click', function(e) {
+            if (e.target === this) closeNewCardModal();
+        });
     }
 });
 </script>

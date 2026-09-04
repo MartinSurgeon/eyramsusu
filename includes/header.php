@@ -291,10 +291,10 @@ function ariaCurrent($page, $currentPage)
                         </div>
                     <?php endif; ?>
 
-                    <a href="logout.php" class="sidebar-link text-slate-400 hover:text-red-400 hover:bg-red-500/10" title="Sign Out">
+                    <button type="button" onclick="openSignOutModal()" class="sidebar-link text-slate-400 hover:text-red-400 hover:bg-red-500/10 w-full text-left" title="Sign Out">
                         <i class="fa-solid fa-right-from-bracket w-5 text-center flex-shrink-0 text-sm"></i>
                         <span class="sidebar-text">Sign Out</span>
-                    </a>
+                    </button>
                 </div>
             </aside>
 
@@ -380,6 +380,9 @@ function ariaCurrent($page, $currentPage)
                                                     <button type="button" id="mark_all_read_btn" class="text-[11px] font-bold text-cornflower_ocean hover:text-steel_azure transition">
                                                         Mark all read
                                                     </button>
+                                                    <button type="button" id="clear_all_notifications_btn" class="text-[11px] font-bold text-slate-400 hover:text-red-500 transition" title="Clear all notifications from view">
+                                                        Clear All
+                                                    </button>
                                                 <?php endif; ?>
                                                 <button type="button" onclick="toggleNotificationDropdown(event)" class="text-slate-400 hover:text-slate-700 font-black text-base px-2 py-1 rounded-lg hover:bg-slate-200/60 leading-none transition" title="Close notifications">
                                                     <i class="fa-solid fa-xmark"></i>
@@ -420,10 +423,10 @@ function ariaCurrent($page, $currentPage)
                                     </div>
                                 </div>
 
-                                <a href="logout.php" title="Sign Out" class="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl transition text-xs font-bold flex items-center gap-1.5">
+                                <button type="button" onclick="openSignOutModal()" title="Sign Out" class="px-3 py-1.5 bg-white/10 hover:bg-red-500/80 text-white rounded-xl transition text-xs font-bold flex items-center gap-1.5">
                                     <i class="fa-solid fa-right-from-bracket text-xs"></i>
                                     <span>Sign Out</span>
-                                </a>
+                                </button>
                             </div>
                         <?php endif; ?>
 

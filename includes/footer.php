@@ -67,24 +67,128 @@
     <?php endif; ?>
 
     <!-- Desktop Footer (Peak-End Rule: Confidence-Building Close) -->
-    <footer class="hidden md:block mt-auto py-6 border-t border-slate-200 bg-white text-center">
-        <div class="max-w-7xl mx-auto px-4">
-            <p class="text-xs text-slate-400 font-medium">
-                Eyram Susu &copy; <?= date('Y') ?> &bull; Digital 31-Space Susu Passbook System
-            </p>
-            <p class="text-xs text-slate-400 mt-1">
-                Need help? Contact your office administrator &bull; Your savings data is stored securely
-            </p>
-            <p class="text-[11px] text-slate-500 font-medium mt-2 flex items-center justify-center gap-1.5">
-                <span>Developed by <strong class="text-slate-700">Mart IT Services</strong></span>
-                <span class="text-slate-300">&bull;</span>
-                <a href="https://wa.me/233557869989" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-emerald-600 hover:text-emerald-700 font-bold hover:underline">
-                    <i class="fa-brands fa-whatsapp text-emerald-600 text-sm"></i>
-                    <span>WhatsApp 0557869989</span>
+    <footer class="hidden md:block mt-auto py-4 border-t border-slate-200 bg-white">
+        <div class="max-w-7xl mx-auto px-6 flex items-center justify-between gap-4 flex-wrap">
+            <!-- Left: Branding + Security Indicator -->
+            <div class="flex items-center gap-3 flex-wrap">
+                <span class="text-xs text-slate-500 font-medium">
+                    <strong class="text-slate-700">Eyram Susu</strong> &copy; <?= date('Y') ?> &bull; Digital 31-Space Susu Passbook System
+                </span>
+                <span class="inline-flex items-center gap-1.5 px-2 py-0.5 bg-emerald-50 border border-emerald-200 rounded-full text-[10px] font-bold text-emerald-700">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block"></span>
+                    Bank-Grade Data Security
+                </span>
+            </div>
+
+            <!-- Right: Developer Credit + WhatsApp -->
+            <div class="flex items-center gap-2.5 flex-wrap">
+                <span class="text-[11px] text-slate-400 font-medium">Developed by <strong class="text-slate-600">Mart IT Services</strong></span>
+                <a href="https://wa.me/233557869989" target="_blank" rel="noopener noreferrer"
+                   class="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-bold rounded-full transition shadow-sm hover:shadow-md">
+                    <i class="fa-brands fa-whatsapp text-sm"></i>
+                    <span>0557869989</span>
                 </a>
-            </p>
+            </div>
         </div>
     </footer>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         SIGN OUT CONFIRMATION MODAL
+         Fitts's Law: Large "Stay Signed In" is default-focused (prevents accidents)
+         Hick's Law: Only two choices — stay or leave.
+         ═══════════════════════════════════════════════════════════════ -->
+    <?php if ($currentUser): ?>
+    <div id="signout_modal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm hidden" role="dialog" aria-modal="true" aria-labelledby="signout_modal_title">
+        <div class="bg-white rounded-2xl border border-silver-600 shadow-2xl max-w-sm w-full overflow-hidden transform transition-all scale-95 duration-200" id="signout_modal_box">
+
+            <!-- Header -->
+            <div class="p-5 bg-gradient-to-r from-slate-800 to-slate-700 text-white flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/40 flex items-center justify-center flex-shrink-0">
+                    <i class="fa-solid fa-right-from-bracket text-red-400 text-sm"></i>
+                </div>
+                <div>
+                    <h3 id="signout_modal_title" class="font-extrabold text-sm leading-tight">Sign Out?</h3>
+                    <p class="text-xs text-slate-400 mt-0.5">You will be returned to the login screen.</p>
+                </div>
+            </div>
+
+            <!-- User Identity Card (Who is signing out) -->
+            <div class="px-5 pt-4 pb-2">
+                <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-steel_azure text-white font-black flex items-center justify-center text-sm flex-shrink-0 shadow-xs">
+                        <?= strtoupper(substr($currentUser['full_name'], 0, 2)) ?>
+                    </div>
+                    <div>
+                        <div class="text-sm font-extrabold text-slate-800"><?= htmlspecialchars($currentUser['full_name']) ?></div>
+                        <div class="text-[11px] text-slate-500 font-medium capitalize">
+                            <?= $currentUser['role'] === 'admin' ? 'Office Manager' : 'Susu Collector' ?>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="px-5 pb-5 pt-3 flex items-center gap-3">
+                <!-- Cancel (default focused — Fitts's Law prevents accidental logout) -->
+                <button type="button" id="signout_stay_btn" onclick="closeSignOutModal()"
+                        class="flex-1 btn-touch px-4 py-2.5 bg-steel_azure hover:bg-steel_azure-400 text-white text-sm font-extrabold rounded-xl shadow-sm transition flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-shield text-xs"></i>
+                    <span>Stay Signed In</span>
+                </button>
+
+                <!-- Confirm logout -->
+                <a href="logout.php"
+                   class="flex-1 btn-touch px-4 py-2.5 bg-white hover:bg-red-50 text-red-600 border border-red-200 hover:border-red-400 text-sm font-bold rounded-xl transition flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-right-from-bracket text-xs"></i>
+                    <span>Yes, Sign Out</span>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    function openSignOutModal() {
+        const modal = document.getElementById('signout_modal');
+        const box   = document.getElementById('signout_modal_box');
+        if (!modal) return;
+        modal.classList.remove('hidden');
+        // Animate in
+        requestAnimationFrame(() => {
+            box.classList.remove('scale-95');
+            box.classList.add('scale-100');
+        });
+        // Focus the "Stay" button (Fitts's Law — safe default)
+        setTimeout(() => {
+            const stayBtn = document.getElementById('signout_stay_btn');
+            if (stayBtn) stayBtn.focus();
+        }, 50);
+    }
+
+    function closeSignOutModal() {
+        const modal = document.getElementById('signout_modal');
+        const box   = document.getElementById('signout_modal_box');
+        if (!modal) return;
+        box.classList.remove('scale-100');
+        box.classList.add('scale-95');
+        setTimeout(() => modal.classList.add('hidden'), 150);
+    }
+
+    // Keyboard: Esc closes, Enter on focused button confirms
+    document.addEventListener('keydown', function(e) {
+        const modal = document.getElementById('signout_modal');
+        if (!modal || modal.classList.contains('hidden')) return;
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            closeSignOutModal();
+        }
+    });
+
+    // Click outside backdrop closes
+    document.getElementById('signout_modal').addEventListener('click', function(e) {
+        if (e.target === this) closeSignOutModal();
+    });
+    </script>
+    <?php endif; ?>
 
     <!-- App JavaScript (Auto-resolves assets/js/ or js/) -->
     <script src="<?= get_asset_url('js') ?>"></script>

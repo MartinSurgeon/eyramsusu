@@ -326,6 +326,34 @@ function get_admin_dashboard_stats() {
 }
 
 /**
+ * Log a lightweight audit event (login, logout, failed_login, open_card, etc.)
+ * Fail-safe: never throws or interrupts the calling workflow.
+ *
+ * @param int|null $userId  The user performing the action (null for unauthenticated attempts)
+ * @param string   $action  Short action name e.g. 'login', 'logout', 'failed_login'
+ * @param string|null $details Human-readable context (max 255 chars)
+ */
+function log_audit_event(?int $userId, string $action, ?string $details = null): void {
+    try {
+        $pdo        = get_db_connection();
+        $ip         = $_SERVER['REMOTE_ADDR'] ?? null;
+        $userAgent  = isset($_SERVER['HTTP_USER_AGENT'])
+                      ? substr($_SERVER['HTTP_USER_AGENT'], 0, 255)
+                      : null;
+        $detailsStr = $details ? substr($details, 0, 255) : null;
+
+        $stmt = $pdo->prepare("
+            INSERT INTO audit_logs (user_id, action, details, ip_address, user_agent, created_at)
+            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ");
+        $stmt->execute([$userId, $action, $detailsStr, $ip, $userAgent]);
+    } catch (\Throwable $e) {
+        // Silently log to PHP error log — never bubble up to the user
+        error_log("audit_log error [{$action}]: " . $e->getMessage());
+    }
+}
+
+/**
  * Create an In-App Notification
  * If $userId is NULL, notification is visible to all admins.
  */
