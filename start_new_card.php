@@ -13,6 +13,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($customerId > 0 && $dailyAmount > 0) {
         $pdo = get_db_connection();
 
+        // Safety Guard: Check if customer already has an active card
+        $stmtCheck = $pdo->prepare("SELECT id FROM susu_cards WHERE customer_id = ? AND status = 'active' LIMIT 1");
+        $stmtCheck->execute([$customerId]);
+        if ($existingCardId = $stmtCheck->fetchColumn()) {
+            set_flash_message('error', 'This customer already has an active Susu Card. Please complete or close it before opening a new one.');
+            header("Location: view_card.php?id={$existingCardId}");
+            exit;
+        }
+
         // Get max card number for this customer
         $stmtMax = $pdo->prepare("SELECT COALESCE(MAX(card_number), 0) FROM susu_cards WHERE customer_id = ?");
         $stmtMax->execute([$customerId]);

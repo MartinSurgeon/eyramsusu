@@ -89,7 +89,7 @@ if ($user['role'] === 'admin') {
 if ($user['role'] === 'collector') {
     $metricsStmt = $pdo->prepare("
         SELECT 
-            COUNT(*) as total_customers,
+            COUNT(DISTINCT c.id) as total_customers,
             COUNT(DISTINCT CASE WHEN sc.id IS NOT NULL THEN c.id END) as active_card_customers
         FROM customers c
         LEFT JOIN susu_cards sc ON c.id = sc.customer_id AND sc.status = 'active'
@@ -99,7 +99,7 @@ if ($user['role'] === 'collector') {
 } else {
     $metricsStmt = $pdo->query("
         SELECT 
-            COUNT(*) as total_customers,
+            COUNT(DISTINCT c.id) as total_customers,
             COUNT(DISTINCT CASE WHEN sc.id IS NOT NULL THEN c.id END) as active_card_customers
         FROM customers c
         LEFT JOIN susu_cards sc ON c.id = sc.customer_id AND sc.status = 'active'
@@ -159,7 +159,12 @@ $sql = "
            sc.id as card_id, sc.card_number, sc.daily_amount, sc.spaces_filled, sc.total_spaces, sc.total_saved, sc.status as card_status
     FROM customers c
     LEFT JOIN users u ON c.assigned_collector_id = u.id
-    LEFT JOIN susu_cards sc ON c.id = sc.customer_id AND sc.status = 'active'
+    LEFT JOIN susu_cards sc ON sc.id = (
+        SELECT id FROM susu_cards 
+        WHERE customer_id = c.id AND status = 'active' 
+        ORDER BY spaces_filled DESC, id DESC 
+        LIMIT 1
+    )
     WHERE {$whereSql}
     ORDER BY c.full_name ASC
 ";
