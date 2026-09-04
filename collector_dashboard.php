@@ -35,6 +35,13 @@ $myCustomers = $stmtCust->fetchAll();
 $totalAssignedCount = count($myCustomers);
 $activeCardsCount = count(array_filter($myCustomers, fn($c) => !empty($c['card_id'])));
 
+// Fetch active admin details for direct messaging
+$stmtAdmin = $pdo->query("SELECT phone, full_name FROM users WHERE role = 'admin' AND is_active = 1 LIMIT 1");
+$adminUser = $stmtAdmin ? $stmtAdmin->fetch() : null;
+$adminPhone = $adminUser ? $adminUser['phone'] : '0553224837';
+$adminName = $adminUser ? $adminUser['full_name'] : 'Admin';
+$cleanAdminPhone = preg_replace('/^0/', '233', preg_replace('/\D/', '', $adminPhone));
+
 require_once __DIR__ . '/includes/header.php';
 ?>
 
@@ -87,7 +94,7 @@ require_once __DIR__ . '/includes/header.php';
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
             <div>
                 <h2 class="text-base sm:text-lg font-bold text-slate-800">My Assigned Customers</h2>
-                <p class="text-xs text-slate-500">Tap "Deposit" on any customer to quickly record their payment.</p>
+                <p class="text-xs text-slate-500">Tap "Deposit" on any customer or alert admin if a new card is required.</p>
             </div>
             
             <!-- Quick Search Filter -->
@@ -155,8 +162,11 @@ require_once __DIR__ . '/includes/header.php';
                                     <?php endif; ?>
                                 </div>
                             <?php else: ?>
-                                <div class="mt-2 text-xs font-semibold text-amber-600 flex items-center gap-1.5">
-                                    <i class="fa-solid fa-triangle-exclamation mr-1"></i> No active card. Admin can start a new card.
+                                <div class="mt-2 text-xs font-semibold text-amber-700 bg-amber-50/80 border border-amber-200/80 rounded-lg px-2.5 py-1.5 inline-flex items-center gap-1.5">
+                                    <i class="fa-solid fa-triangle-exclamation text-amber-600 text-xs"></i>
+                                    <span>No active card</span>
+                                    <span class="text-slate-400">&bull;</span>
+                                    <span class="text-slate-500 font-normal">Admin can start a new card</span>
                                 </div>
                             <?php endif; ?>
                         </div>
@@ -174,6 +184,19 @@ require_once __DIR__ . '/includes/header.php';
                                     <i class="fa-solid fa-id-card text-xs"></i>
                                     <span>Card</span>
                                 </a>
+                            <?php else: ?>
+                                <button type="button" 
+                                        onclick='openCardAlertModal(<?= htmlspecialchars(json_encode([
+                                            "id" => $cust["id"],
+                                            "full_name" => $cust["full_name"],
+                                            "account_number" => $cust["account_number"],
+                                            "phone" => $cust["phone"],
+                                            "location" => $cust["location"] ?: "No location specified"
+                                        ]), ENT_QUOTES) ?>)'
+                                        class="btn-touch flex-1 sm:flex-none bg-steel_azure hover:bg-steel_azure-400 text-white text-xs font-extrabold px-3.5 py-2 rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer">
+                                    <i class="fa-solid fa-bell text-xs"></i>
+                                    <span>Alert Admin</span>
+                                </button>
                             <?php endif; ?>
                         </div>
 
@@ -185,5 +208,179 @@ require_once __DIR__ . '/includes/header.php';
     </div>
 
 </div>
+
+<!-- ============================================================
+     ALERT ADMIN CONFIRMATION MODAL (HCI & Jakob's Law)
+     ============================================================ -->
+<div id="alert_admin_modal" class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm hidden" role="dialog" aria-modal="true" aria-labelledby="alert_modal_title">
+    <div class="bg-white rounded-2xl border border-silver-600 shadow-2xl max-w-md w-full overflow-hidden transform transition-all scale-95 duration-200 my-auto" id="alert_admin_modal_box">
+        <!-- Header -->
+        <div class="p-4 sm:p-5 bg-gradient-to-r from-steel_azure to-steel_azure-400 text-white flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
+                    <i class="fa-solid fa-bell text-base"></i>
+                </div>
+                <div>
+                    <h3 id="alert_modal_title" class="font-extrabold text-sm sm:text-base leading-tight">Alert Admin to Open Card</h3>
+                    <p class="text-xs text-white/75 mt-0.5">Request a new 31-space Susu card for client.</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeCardAlertModal()" class="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition cursor-pointer" title="Close" aria-label="Close modal">
+                <i class="fa-solid fa-xmark text-sm"></i>
+            </button>
+        </div>
+
+        <div class="p-5 sm:p-6 space-y-4">
+            <!-- Customer Identity Summary Card -->
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-steel_azure text-white font-black flex items-center justify-center text-sm flex-shrink-0 shadow-xs" id="modal_cust_avatar">
+                    --
+                </div>
+                <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-1.5">
+                        <div class="text-sm font-extrabold text-slate-800 truncate" id="modal_cust_name">-</div>
+                        <span class="text-[10px] font-mono text-slate-500 bg-white border border-slate-200 px-1.5 py-0.2 rounded font-bold" id="modal_cust_acc">-</span>
+                    </div>
+                    <div class="text-[11px] text-slate-500 font-medium truncate mt-0.5" id="modal_cust_loc">-</div>
+                </div>
+            </div>
+
+            <!-- Context Info -->
+            <p class="text-xs text-slate-600 leading-relaxed">
+                As a field collector, you cannot issue cards directly. Choose how you want to notify the office administrator:
+            </p>
+
+            <!-- Action Buttons Stack (Fitts's Law: Large Thumb Targets) -->
+            <div class="space-y-2.5 pt-1">
+                <!-- 1. Send In-App Notification (Primary) -->
+                <button type="button" id="modal_send_inapp_btn" onclick="sendModalAdminAlert()"
+                        class="w-full btn-touch bg-steel_azure hover:bg-steel_azure-400 text-white font-extrabold text-xs sm:text-sm py-3 px-4 rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer">
+                    <i class="fa-solid fa-bell text-xs"></i>
+                    <span id="modal_send_inapp_text">Send In-App Alert to Admin</span>
+                </button>
+
+                <!-- 2. Direct WhatsApp Link -->
+                <a id="modal_wa_link" href="#" target="_blank" rel="noopener noreferrer"
+                   class="w-full btn-touch bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs sm:text-sm py-3 px-4 rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer">
+                    <i class="fa-brands fa-whatsapp text-sm"></i>
+                    <span>WhatsApp Admin (<?= htmlspecialchars($adminPhone) ?>)</span>
+                </a>
+            </div>
+
+            <!-- In-Modal Success Message -->
+            <div id="modal_alert_feedback" class="hidden text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 p-3 rounded-xl flex items-center gap-2.5">
+                <i class="fa-solid fa-circle-check text-emerald-600 text-base flex-shrink-0"></i>
+                <span>Notification sent! The office administrator has been alerted in real time.</span>
+            </div>
+
+            <div class="pt-3 border-t border-silver-600 flex items-center justify-end">
+                <button type="button" onclick="closeCardAlertModal()" class="btn-touch bg-white text-slate-600 border border-silver-600 hover:bg-slate-50 text-xs font-bold px-4 py-2 rounded-xl transition">
+                    Dismiss
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentModalCustomerId = null;
+const adminPhone = <?= json_encode($cleanAdminPhone) ?>;
+const adminName = <?= json_encode($adminName) ?>;
+
+function openCardAlertModal(cust) {
+    currentModalCustomerId = cust.id;
+    
+    // Set customer details
+    document.getElementById('modal_cust_name').textContent = cust.full_name;
+    document.getElementById('modal_cust_acc').textContent = '#' + cust.account_number;
+    document.getElementById('modal_cust_loc').textContent = cust.location || cust.phone || '';
+    
+    // Set avatar initials
+    const initials = (cust.full_name || '').split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
+    document.getElementById('modal_cust_avatar').textContent = initials || 'CU';
+
+    // Prepare WhatsApp URL
+    const waText = encodeURIComponent(`Hello ${adminName}, customer ${cust.full_name} (#${cust.account_number}) needs a new Susu Card opened so I can record their deposit.`);
+    document.getElementById('modal_wa_link').href = `https://wa.me/${adminPhone}?text=${waText}`;
+
+    // Reset button & feedback
+    const btn = document.getElementById('modal_send_inapp_btn');
+    const btnText = document.getElementById('modal_send_inapp_text');
+    const feedback = document.getElementById('modal_alert_feedback');
+    btn.disabled = false;
+    btn.className = 'w-full btn-touch bg-steel_azure hover:bg-steel_azure-400 text-white font-extrabold text-xs sm:text-sm py-3 px-4 rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer';
+    btnText.textContent = 'Send In-App Alert to Admin';
+    feedback.classList.add('hidden');
+
+    // Show modal with animation
+    const modal = document.getElementById('alert_admin_modal');
+    const box = document.getElementById('alert_admin_modal_box');
+    modal.classList.remove('hidden');
+    setTimeout(() => {
+        box.classList.remove('scale-95');
+        box.classList.add('scale-100');
+    }, 10);
+}
+
+function closeCardAlertModal() {
+    const modal = document.getElementById('alert_admin_modal');
+    const box = document.getElementById('alert_admin_modal_box');
+    if (!modal) return;
+    box.classList.remove('scale-100');
+    box.classList.add('scale-95');
+    setTimeout(() => {
+        modal.classList.add('hidden');
+    }, 150);
+}
+
+function sendModalAdminAlert() {
+    if (!currentModalCustomerId) return;
+    const btn = document.getElementById('modal_send_inapp_btn');
+    const btnText = document.getElementById('modal_send_inapp_text');
+    const feedback = document.getElementById('modal_alert_feedback');
+
+    btn.disabled = true;
+    btnText.textContent = 'Sending alert...';
+
+    const formData = new FormData();
+    formData.append('action', 'alert_admin_card');
+    formData.append('customer_id', currentModalCustomerId);
+
+    fetch('api_notifications.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            btn.className = 'w-full btn-touch bg-emerald-600 text-white font-extrabold text-xs sm:text-sm py-3 px-4 rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-default';
+            btnText.innerHTML = '<i class="fa-solid fa-check"></i> Alert Sent to Admin';
+            feedback.classList.remove('hidden');
+        } else {
+            btn.disabled = false;
+            btnText.textContent = 'Send In-App Alert to Admin';
+            alert(data.error || 'Could not send alert. Please use WhatsApp.');
+        }
+    })
+    .catch(err => {
+        btn.disabled = false;
+        btnText.textContent = 'Send In-App Alert to Admin';
+        alert('Network error. Please use the WhatsApp button.');
+    });
+}
+
+// Close on backdrop click & ESC
+document.addEventListener('DOMContentLoaded', function() {
+    const modal = document.getElementById('alert_admin_modal');
+    if (modal) {
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) closeCardAlertModal();
+        });
+    }
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeCardAlertModal();
+    });
+});
+</script>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

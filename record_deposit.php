@@ -349,28 +349,32 @@ require_once __DIR__ . '/includes/header.php';
         <?php if ($activeCustomer): ?>
             <?php if (!$activeCustomer['card_id']): ?>
                 <!-- No Active Card Section (HCI: Hick's Law, Fitts's Law, Plain Language) -->
-                <div class="rounded-2xl border-2 border-amber-300 bg-amber-50/70 p-5 sm:p-6 space-y-4">
+                <div class="rounded-2xl border border-amber-300/90 bg-gradient-to-br from-amber-50/90 via-amber-100/30 to-orange-50/40 p-5 sm:p-6 space-y-4 shadow-sm">
                     
-                    <div class="flex items-start gap-3">
-                        <div class="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center flex-shrink-0 text-lg">
+                    <div class="flex items-start gap-3.5">
+                        <div class="w-11 h-11 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center flex-shrink-0 text-xl shadow-2xs ring-4 ring-amber-100/50">
                             <i class="fa-solid fa-triangle-exclamation"></i>
                         </div>
-                        <div>
-                            <h4 class="font-black text-sm sm:text-base text-slate-800">
-                                Active Card Required for <?= htmlspecialchars($activeCustomer['full_name']) ?>
+                        <div class="min-w-0 flex-1">
+                            <h4 class="font-extrabold text-sm sm:text-base text-slate-800 flex items-center flex-wrap gap-2">
+                                <span>Active Card Required for <?= htmlspecialchars($activeCustomer['full_name']) ?></span>
+                                <span class="text-[11px] font-mono font-bold text-slate-500 bg-white/80 border border-amber-200 px-2 py-0.5 rounded-md">
+                                    #<?= htmlspecialchars($activeCustomer['account_number']) ?>
+                                </span>
                             </h4>
-                            <p class="text-xs text-slate-600 mt-0.5 leading-relaxed">
-                                Deposits cannot be stamped because this customer does not currently have an active 31-space Susu card.
+                            <p class="text-xs text-slate-600 mt-1 leading-relaxed">
+                                Deposits cannot be stamped because this customer does not currently have an active 31-space Susu card cycle.
                             </p>
                         </div>
                     </div>
 
                     <?php if ($user['role'] === 'admin'): ?>
                         <!-- Admin Action Box: Instant 1-Click Card Opener (Hick's Law: 1 Obvious Primary Action) -->
-                        <div class="bg-white p-4 sm:p-5 rounded-xl border border-amber-200 shadow-xs space-y-3">
-                            <div class="flex items-center justify-between">
-                                <span class="text-xs font-black text-slate-700 uppercase tracking-wider">
-                                    Open New 31-Space Card
+                        <div class="bg-white/95 backdrop-blur-sm p-4 sm:p-5 rounded-2xl border border-amber-200/80 shadow-xs space-y-3.5">
+                            <div class="flex items-center justify-between pb-2 border-b border-amber-100">
+                                <span class="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                                    <i class="fa-solid fa-plus-circle text-emerald-600"></i>
+                                    <span>Open New 31-Space Card</span>
                                 </span>
                                 <span class="text-[11px] text-slate-400 font-medium">31 spaces &bull; Card Cycle</span>
                             </div>
@@ -393,7 +397,7 @@ require_once __DIR__ . '/includes/header.php';
 
                                 <button type="submit" 
                                         formaction="start_new_card.php" formmethod="POST"
-                                        class="w-full btn-touch bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs sm:text-sm py-3 rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer">
+                                        class="w-full btn-touch bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-extrabold text-xs sm:text-sm py-3 rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer">
                                     <i class="fa-solid fa-plus-circle text-sm"></i>
                                     <span>Open Card & Continue Deposit</span>
                                 </button>
@@ -411,30 +415,31 @@ require_once __DIR__ . '/includes/header.php';
                             $waUrl = "https://wa.me/{$cleanPhone}?text={$waText}";
                         ?>
 
-                        <div class="bg-white p-4 sm:p-5 rounded-xl border border-amber-200 shadow-xs space-y-3">
-                            <p class="text-xs font-semibold text-slate-700">
+                        <div class="bg-white/95 backdrop-blur-sm p-4 sm:p-5 rounded-2xl border border-amber-200/80 shadow-xs space-y-3.5">
+                            <p class="text-xs font-semibold text-slate-700 leading-relaxed">
+                                <i class="fa-solid fa-circle-info text-steel_azure mr-1"></i>
                                 As a field collector, you cannot issue cards directly. Alert the office administrator to open a new card:
                             </p>
 
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
                                 <!-- In-App Alert Button (Fitts's Law: Large Thumb Target) -->
                                 <button type="button" id="alert_admin_btn" onclick="sendAdminCardAlert(<?= $activeCustomer['id'] ?>)"
-                                        class="btn-touch bg-steel_azure hover:bg-steel_azure-400 text-white font-bold text-xs py-3 px-3 rounded-xl shadow-xs transition flex items-center justify-center gap-2">
+                                        class="btn-touch bg-steel_azure hover:bg-steel_azure-400 active:scale-98 text-white font-extrabold text-xs sm:text-sm py-3 px-4 rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer">
                                     <i class="fa-solid fa-bell text-xs"></i>
                                     <span id="alert_admin_btn_text">Alert Admin to Open Card</span>
                                 </button>
 
                                 <!-- 1-Tap WhatsApp to Admin (Familiar Pattern / Jakob's Law) -->
                                 <a href="<?= $waUrl ?>" target="_blank" rel="noopener noreferrer"
-                                   class="btn-touch bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-3 px-3 rounded-xl shadow-xs transition flex items-center justify-center gap-2">
+                                   class="btn-touch bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-extrabold text-xs sm:text-sm py-3 px-4 rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer">
                                     <i class="fa-brands fa-whatsapp text-sm"></i>
                                     <span>WhatsApp Admin (<?= htmlspecialchars($adminPhone) ?>)</span>
                                 </a>
                             </div>
 
-                            <div id="alert_feedback_msg" class="hidden text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 p-2.5 rounded-xl flex items-center gap-2">
-                                <i class="fa-solid fa-circle-check text-emerald-600 text-sm"></i>
-                                <span>Notification sent! The office administrator has been alerted to open this card.</span>
+                            <div id="alert_feedback_msg" class="hidden text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 p-3 rounded-xl flex items-center gap-2.5">
+                                <i class="fa-solid fa-circle-check text-emerald-600 text-base flex-shrink-0"></i>
+                                <span>Notification sent! The office administrator has been alerted in real time to open this card.</span>
                             </div>
                         </div>
 
