@@ -55,6 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $username = trim($_POST['username'] ?? '');
         $newPassword = $_POST['new_password'] ?? '';
         $isActive = isset($_POST['is_active']) ? 1 : 0;
+        $routeAction = $_POST['route_action'] ?? 'none';
 
         if ($collectorId <= 0 || empty($fullName) || empty($phone) || empty($username)) {
             $error = 'Collector ID, Full Name, Phone, and Username are required.';
@@ -66,6 +67,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = "Username '{$username}' is already in use by another user.";
             } else {
                 try {
+                    $pdo->beginTransaction();
+
                     if (!empty($newPassword)) {
                         $passHash = password_hash($newPassword, PASSWORD_DEFAULT);
                         $stmtUp = $pdo->prepare("
@@ -83,10 +86,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $stmtUp->execute([$fullName, $phone, $username, $isActive, $collectorId]);
                     }
 
-                    set_flash_message('success', "Collector '{$fullName}' updated successfully!");
+                    // Route Reassignment Processing
+                    $assignedMsg = '';
+                    if ($routeAction === 'assign_unassigned') {
+                        $stmtAssign = $pdo->prepare("UPDATE customers SET assigned_collector_id = ? WHERE assigned_collector_id IS NULL AND is_active = 1");
+                        $stmtAssign->execute([$collectorId]);
+                        $count = $stmtAssign->rowCount();
+                        if ($count > 0) {
+                            $assignedMsg = " and assigned {$count} previously unassigned client(s)";
+                            create_notification($collectorId, 'customer_assigned', "Route Assignment", "{$count} unassigned clients assigned to your route.", "customers.php");
+                        }
+                    } elseif ($routeAction === 'transfer_from') {
+                        $fromColId = (int)($_POST['transfer_from_collector_id'] ?? 0);
+                        if ($fromColId > 0 && $fromColId !== $collectorId) {
+                            $stmtTransfer = $pdo->prepare("UPDATE customers SET assigned_collector_id = ? WHERE assigned_collector_id = ?");
+                            $stmtTransfer->execute([$collectorId, $fromColId]);
+                            $count = $stmtTransfer->rowCount();
+                            if ($count > 0) {
+                                $assignedMsg = " and transferred {$count} client(s) to their route";
+                                create_notification($collectorId, 'customer_assigned', "Route Transferred", "{$count} clients transferred to your route.", "customers.php");
+                            }
+                        }
+                    } elseif ($routeAction === 'unassign_all') {
+                        $stmtUnassign = $pdo->prepare("UPDATE customers SET assigned_collector_id = NULL WHERE assigned_collector_id = ?");
+                        $stmtUnassign->execute([$collectorId]);
+                        $count = $stmtUnassign->rowCount();
+                        if ($count > 0) {
+                            $assignedMsg = " and unassigned {$count} client(s)";
+                        }
+                    } elseif ($routeAction === 'specific_clients' && isset($_POST['selected_customer_ids']) && is_array($_POST['selected_customer_ids'])) {
+                        $selectedIds = array_map('intval', $_POST['selected_customer_ids']);
+                        if (!empty($selectedIds)) {
+                            $placeholders = implode(',', array_fill(0, count($selectedIds), '?'));
+                            $stmtSpecific = $pdo->prepare("UPDATE customers SET assigned_collector_id = ? WHERE id IN ($placeholders)");
+                            $stmtSpecific->execute(array_merge([$collectorId], $selectedIds));
+                            $count = count($selectedIds);
+                            $assignedMsg = " and assigned {$count} selected client(s)";
+                            create_notification($collectorId, 'customer_assigned', "Clients Assigned", "{$count} clients assigned to your route.", "customers.php");
+                        }
+                    }
+
+                    $pdo->commit();
+
+                    set_flash_message('success', "Collector '{$fullName}' updated successfully{$assignedMsg}!");
                     header('Location: collectors.php');
                     exit;
                 } catch (Exception $e) {
+                    if ($pdo->inTransaction()) {
+                        $pdo->rollBack();
+                    }
                     $error = 'Error updating collector: ' . $e->getMessage();
                 }
             }
@@ -154,15 +202,66 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // 4. Reactivate Collector
     elseif ($action === 'reactivate_collector') {
         $collectorId = (int)($_POST['collector_id'] ?? 0);
+        $routeAction = $_POST['reactivate_route_action'] ?? 'none';
+
         if ($collectorId > 0) {
-            $stmtAct = $pdo->prepare("UPDATE users SET is_active = 1 WHERE id = ? AND role = 'collector'");
-            $stmtAct->execute([$collectorId]);
-            set_flash_message('success', 'Collector reactivated successfully!');
-            header('Location: collectors.php');
-            exit;
+            try {
+                $pdo->beginTransaction();
+
+                $stmtAct = $pdo->prepare("UPDATE users SET is_active = 1 WHERE id = ? AND role = 'collector'");
+                $stmtAct->execute([$collectorId]);
+
+                $reassignedCount = 0;
+                if ($routeAction === 'assign_unassigned') {
+                    $stmtAssign = $pdo->prepare("UPDATE customers SET assigned_collector_id = ? WHERE assigned_collector_id IS NULL AND is_active = 1");
+                    $stmtAssign->execute([$collectorId]);
+                    $reassignedCount = $stmtAssign->rowCount();
+                } elseif ($routeAction === 'transfer_from') {
+                    $fromColId = (int)($_POST['reactivate_transfer_from_id'] ?? 0);
+                    if ($fromColId > 0 && $fromColId !== $collectorId) {
+                        $stmtTransfer = $pdo->prepare("UPDATE customers SET assigned_collector_id = ? WHERE assigned_collector_id = ?");
+                        $stmtTransfer->execute([$collectorId, $fromColId]);
+                        $reassignedCount = $stmtTransfer->rowCount();
+                    }
+                } elseif ($routeAction === 'specific_clients' && isset($_POST['reactivate_selected_customer_ids']) && is_array($_POST['reactivate_selected_customer_ids'])) {
+                    $selectedIds = array_map('intval', $_POST['reactivate_selected_customer_ids']);
+                    if (!empty($selectedIds)) {
+                        $placeholders = implode(',', array_fill(0, count($selectedIds), '?'));
+                        $stmtSpecific = $pdo->prepare("UPDATE customers SET assigned_collector_id = ? WHERE id IN ($placeholders)");
+                        $stmtSpecific->execute(array_merge([$collectorId], $selectedIds));
+                        $reassignedCount = count($selectedIds);
+                    }
+                }
+
+                if ($reassignedCount > 0) {
+                    create_notification($collectorId, 'customer_assigned', "Route Assignment on Reactivation", "{$reassignedCount} clients assigned to your route.", "customers.php");
+                }
+
+                $pdo->commit();
+
+                $successMsg = "Collector reactivated successfully" . ($reassignedCount > 0 ? " with {$reassignedCount} client(s) assigned!" : "!");
+                set_flash_message('success', $successMsg);
+                header('Location: collectors.php');
+                exit;
+            } catch (Exception $e) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                $error = 'Error reactivating collector: ' . $e->getMessage();
+            }
         }
     }
 }
+
+// Fetch unassigned active customers
+$stmtUnassigned = $pdo->query("
+    SELECT id, full_name, account_number, phone, location 
+    FROM customers 
+    WHERE assigned_collector_id IS NULL AND is_active = 1
+    ORDER BY full_name ASC
+");
+$unassignedCustomers = $stmtUnassigned->fetchAll();
+$unassignedCount = count($unassignedCustomers);
 
 // Fetch all collectors with statistics
 $stmtAll = $pdo->query("
@@ -465,19 +564,19 @@ require_once __DIR__ . '/includes/header.php';
 </div>
 
 <!-- ============================================================
-     MODAL 2: Edit Collector Details
+     MODAL 2: Edit Collector Details & Route Management
      ============================================================ -->
 <div id="edit_modal" class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm hidden" role="dialog" aria-modal="true" aria-labelledby="edit_modal_title">
-    <div class="bg-white rounded-2xl border border-silver-600 shadow-2xl max-w-lg w-full overflow-hidden transform transition-all scale-95 duration-200 my-auto" id="edit_modal_box">
+    <div class="bg-white rounded-2xl border border-silver-600 shadow-2xl max-w-xl w-full overflow-hidden transform transition-all scale-95 duration-200 my-auto max-h-[92vh] flex flex-col" id="edit_modal_box">
         <!-- Header -->
-        <div class="p-4 sm:p-5 bg-gradient-to-r from-steel_azure to-steel_azure-400 text-white flex items-center justify-between">
+        <div class="p-4 sm:p-5 bg-gradient-to-r from-steel_azure to-steel_azure-400 text-white flex items-center justify-between flex-shrink-0">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
                     <i class="fa-solid fa-user-pen text-base"></i>
                 </div>
                 <div>
-                    <h3 id="edit_modal_title" class="font-extrabold text-sm sm:text-base leading-tight">Edit Collector Profile</h3>
-                    <p class="text-xs text-white/75 mt-0.5">Update credentials and authorization status.</p>
+                    <h3 id="edit_modal_title" class="font-extrabold text-sm sm:text-base leading-tight">Edit Collector Profile & Routes</h3>
+                    <p class="text-xs text-white/75 mt-0.5">Update agent credentials and customer route assignments.</p>
                 </div>
             </div>
             <button type="button" onclick="closeEditModal()" class="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition cursor-pointer" title="Close" aria-label="Close modal">
@@ -485,48 +584,131 @@ require_once __DIR__ . '/includes/header.php';
             </button>
         </div>
 
-        <form method="POST" action="collectors.php" class="p-5 sm:p-6 space-y-4">
+        <form method="POST" action="collectors.php" class="p-5 sm:p-6 space-y-5 overflow-y-auto flex-1">
             <input type="hidden" name="action" value="update_collector">
             <input type="hidden" id="edit_collector_id" name="collector_id" value="">
 
-            <div>
-                <label for="edit_full_name" class="block text-xs font-bold text-slate-700 mb-1">Full Legal Name *</label>
-                <input type="text" id="edit_full_name" name="full_name" required
-                       class="w-full px-3.5 py-2.5 rounded-xl border border-silver-600 focus:border-steel_azure outline-none text-xs sm:text-sm font-semibold transition bg-slate-50/50 focus:bg-white">
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                    <label for="edit_phone" class="block text-xs font-bold text-slate-700 mb-1">Mobile Phone Number *</label>
-                    <input type="text" id="edit_phone" name="phone" required
-                           class="w-full px-3.5 py-2.5 rounded-xl border border-silver-600 focus:border-steel_azure outline-none text-xs sm:text-sm font-semibold transition bg-slate-50/50 focus:bg-white">
+            <!-- Group 1: Profile & Credentials -->
+            <div class="space-y-3.5">
+                <div class="flex items-center gap-2 pb-2 border-b border-silver-600/70 text-steel_azure font-extrabold text-xs uppercase tracking-wider">
+                    <i class="fa-solid fa-id-card"></i>
+                    <span>Agent Profile & Credentials</span>
                 </div>
 
                 <div>
-                    <label for="edit_username" class="block text-xs font-bold text-slate-700 mb-1">Login Username *</label>
-                    <input type="text" id="edit_username" name="username" required
+                    <label for="edit_full_name" class="block text-xs font-bold text-slate-700 mb-1">Full Legal Name *</label>
+                    <input type="text" id="edit_full_name" name="full_name" required
                            class="w-full px-3.5 py-2.5 rounded-xl border border-silver-600 focus:border-steel_azure outline-none text-xs sm:text-sm font-semibold transition bg-slate-50/50 focus:bg-white">
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label for="edit_phone" class="block text-xs font-bold text-slate-700 mb-1">Mobile Phone Number *</label>
+                        <input type="text" id="edit_phone" name="phone" required
+                               class="w-full px-3.5 py-2.5 rounded-xl border border-silver-600 focus:border-steel_azure outline-none text-xs sm:text-sm font-semibold transition bg-slate-50/50 focus:bg-white">
+                    </div>
+
+                    <div>
+                        <label for="edit_username" class="block text-xs font-bold text-slate-700 mb-1">Login Username *</label>
+                        <input type="text" id="edit_username" name="username" required
+                               class="w-full px-3.5 py-2.5 rounded-xl border border-silver-600 focus:border-steel_azure outline-none text-xs sm:text-sm font-semibold transition bg-slate-50/50 focus:bg-white">
+                    </div>
+                </div>
+
+                <div>
+                    <label for="edit_new_password" class="block text-xs font-bold text-slate-700 mb-1">Reset Password (Optional)</label>
+                    <input type="password" id="edit_new_password" name="new_password" placeholder="Leave blank to keep existing password"
+                           class="w-full px-3.5 py-2.5 rounded-xl border border-silver-600 focus:border-steel_azure outline-none text-xs sm:text-sm font-semibold transition bg-slate-50/50 focus:bg-white">
+                </div>
+
+                <div class="flex items-center gap-2.5 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700">
+                    <input type="checkbox" id="edit_is_active" name="is_active" value="1" class="w-4 h-4 rounded text-steel_azure">
+                    <label for="edit_is_active" class="cursor-pointer">Account is Active & Authorized</label>
                 </div>
             </div>
 
-            <div>
-                <label for="edit_new_password" class="block text-xs font-bold text-slate-700 mb-1">Reset Password (Optional)</label>
-                <input type="password" id="edit_new_password" name="new_password" placeholder="Leave blank to keep existing password"
-                       class="w-full px-3.5 py-2.5 rounded-xl border border-silver-600 focus:border-steel_azure outline-none text-xs sm:text-sm font-semibold transition bg-slate-50/50 focus:bg-white">
+            <!-- Group 2: Customer Route Assignment (UI/UX Plain Language + Hick's Law) -->
+            <div class="space-y-3.5 pt-2">
+                <div class="flex items-center justify-between pb-2 border-b border-silver-600/70">
+                    <div class="flex items-center gap-2 text-steel_azure font-extrabold text-xs uppercase tracking-wider">
+                        <i class="fa-solid fa-route"></i>
+                        <span>Customer Route Assignment</span>
+                    </div>
+                    <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-steel_azure/10 text-steel_azure">
+                        Currently Managing: <strong id="edit_assigned_count">0</strong> Clients
+                    </span>
+                </div>
+
+                <div>
+                    <label for="edit_route_action" class="block text-xs font-bold text-slate-700 mb-1">Route Action</label>
+                    <select id="edit_route_action" name="route_action" onchange="toggleEditRouteContainers()"
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-silver-600 focus:border-steel_azure outline-none text-xs sm:text-sm font-semibold transition bg-white">
+                        <option value="none">-- Keep Existing Client Assignments --</option>
+                        <?php if ($unassignedCount > 0): ?>
+                            <option value="assign_unassigned">+ Assign All Unassigned Clients (<?= $unassignedCount ?> clients)</option>
+                            <option value="specific_clients">☑ Pick Specific Unassigned Clients to Assign...</option>
+                        <?php endif; ?>
+                        <option value="transfer_from">⇄ Transfer All Clients From Another Collector...</option>
+                        <option value="unassign_all">✕ Remove / Unassign All Clients from this Collector</option>
+                    </select>
+                </div>
+
+                <!-- Transfer From Collector Dropdown -->
+                <div id="edit_transfer_container" class="hidden p-3.5 bg-blue-50 border border-blue-200 rounded-xl space-y-2">
+                    <label for="edit_transfer_from_col_id" class="block text-xs font-bold text-slate-800">
+                        Transfer Route From:
+                    </label>
+                    <select id="edit_transfer_from_col_id" name="transfer_from_collector_id"
+                            class="w-full px-3 py-2 rounded-xl border border-silver-600 focus:border-steel_azure outline-none text-xs font-semibold bg-white">
+                        <option value="">-- Select Source Collector --</option>
+                        <?php foreach ($collectors as $c): ?>
+                            <option value="<?= $c['id'] ?>" class="edit-transfer-col-opt" data-id="<?= $c['id'] ?>">
+                                <?= htmlspecialchars($c['full_name']) ?> (<?= $c['assigned_clients'] ?> clients currently)
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <p class="text-[11px] text-slate-500">All customers assigned to the selected collector will be moved to this collector's route.</p>
+                </div>
+
+                <!-- Specific Unassigned Clients Picker -->
+                <?php if ($unassignedCount > 0): ?>
+                <div id="edit_specific_container" class="hidden p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
+                    <div class="flex items-center justify-between gap-2">
+                        <label class="text-xs font-bold text-slate-800">Select Unassigned Clients:</label>
+                        <div class="flex items-center gap-1.5 text-[11px]">
+                            <button type="button" onclick="selectAllEditClients(true)" class="text-steel_azure font-bold hover:underline">Select All</button>
+                            <span class="text-slate-300">|</span>
+                            <button type="button" onclick="selectAllEditClients(false)" class="text-slate-500 font-medium hover:underline">Deselect</button>
+                        </div>
+                    </div>
+                    <input type="text" id="edit_client_filter" oninput="filterEditClients()" placeholder="Filter by client name or account #..."
+                           class="w-full px-3 py-1.5 rounded-lg border border-silver-600 text-xs outline-none bg-white">
+                    <div class="max-h-44 overflow-y-auto divide-y divide-slate-200 border border-slate-200 rounded-lg bg-white p-1" id="edit_clients_list">
+                        <?php foreach ($unassignedCustomers as $uc): ?>
+                            <label class="edit-client-item flex items-center justify-between p-2 hover:bg-slate-50 rounded cursor-pointer text-xs"
+                                   data-search="<?= strtolower($uc['full_name'] . ' ' . $uc['account_number'] . ' ' . ($uc['location'] ?? '')) ?>">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <input type="checkbox" name="selected_customer_ids[]" value="<?= $uc['id'] ?>" class="edit-client-checkbox w-4 h-4 rounded text-steel_azure">
+                                    <span class="font-bold text-slate-800 truncate"><?= htmlspecialchars($uc['full_name']) ?></span>
+                                    <span class="text-[11px] font-mono text-slate-400">#<?= htmlspecialchars($uc['account_number']) ?></span>
+                                </div>
+                                <?php if (!empty($uc['location'])): ?>
+                                    <span class="text-[10px] text-slate-400 ml-2 truncate max-w-[120px]"><?= htmlspecialchars($uc['location']) ?></span>
+                                <?php endif; ?>
+                            </label>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+                <?php endif; ?>
             </div>
 
-            <div class="flex items-center gap-2.5 p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700">
-                <input type="checkbox" id="edit_is_active" name="is_active" value="1" class="w-4 h-4 rounded text-steel_azure">
-                <label for="edit_is_active" class="cursor-pointer">Account is Active & Authorized</label>
-            </div>
-
-            <div class="pt-4 border-t border-silver-600 flex items-center justify-end gap-2.5">
+            <div class="pt-4 border-t border-silver-600 flex items-center justify-end gap-2.5 flex-shrink-0">
                 <button type="button" onclick="closeEditModal()" class="btn-touch bg-white text-slate-600 border border-silver-600 hover:bg-slate-50 text-xs font-bold px-4 py-2.5 rounded-xl transition">
                     Cancel
                 </button>
                 <button type="submit" class="btn-touch bg-steel_azure hover:bg-steel_azure-400 text-white text-xs font-extrabold px-5 py-2.5 rounded-xl shadow-md transition flex items-center gap-1.5">
                     <i class="fa-solid fa-floppy-disk text-xs"></i>
-                    <span>Save Changes</span>
+                    <span>Save Changes & Route</span>
                 </button>
             </div>
         </form>
@@ -595,19 +777,19 @@ require_once __DIR__ . '/includes/header.php';
 </div>
 
 <!-- ============================================================
-     MODAL 4: Reactivate Collector Confirmation Modal
+     MODAL 4: Reactivate Collector & Assign Route Modal
      ============================================================ -->
 <div id="reactivate_modal" class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm hidden" role="dialog" aria-modal="true" aria-labelledby="reactivate_modal_title">
-    <div class="bg-white rounded-2xl border border-silver-600 shadow-2xl max-w-sm w-full overflow-hidden transform transition-all scale-95 duration-200 my-auto" id="reactivate_modal_box">
+    <div class="bg-white rounded-2xl border border-silver-600 shadow-2xl max-w-lg w-full overflow-hidden transform transition-all scale-95 duration-200 my-auto max-h-[92vh] flex flex-col" id="reactivate_modal_box">
         <!-- Header -->
-        <div class="p-4 sm:p-5 bg-gradient-to-r from-emerald-600 to-teal-700 text-white flex items-center justify-between">
+        <div class="p-4 sm:p-5 bg-gradient-to-r from-emerald-600 to-teal-700 text-white flex items-center justify-between flex-shrink-0">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
                     <i class="fa-solid fa-user-check text-base"></i>
                 </div>
                 <div>
-                    <h3 id="reactivate_modal_title" class="font-extrabold text-sm sm:text-base leading-tight">Reactivate Collector?</h3>
-                    <p class="text-xs text-emerald-100 mt-0.5">Restore field agent authorizations.</p>
+                    <h3 id="reactivate_modal_title" class="font-extrabold text-sm sm:text-base leading-tight">Reactivate Collector & Assign Route</h3>
+                    <p class="text-xs text-emerald-100 mt-0.5">Restore field agent access and assign client portfolio.</p>
                 </div>
             </div>
             <button type="button" onclick="closeReactivateModal()" class="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition cursor-pointer" title="Close" aria-label="Close modal">
@@ -615,7 +797,10 @@ require_once __DIR__ . '/includes/header.php';
             </button>
         </div>
 
-        <div class="p-5 space-y-4">
+        <form method="POST" action="collectors.php" class="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1">
+            <input type="hidden" name="action" value="reactivate_collector">
+            <input type="hidden" id="reactivate_collector_id" name="collector_id" value="">
+
             <!-- Collector Identity Review Card -->
             <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex items-center gap-3">
                 <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white font-black flex items-center justify-center text-sm flex-shrink-0 shadow-xs" id="reactivate_avatar">
@@ -625,18 +810,89 @@ require_once __DIR__ . '/includes/header.php';
                     <div class="text-sm font-extrabold text-slate-800 truncate" id="reactivate_name">-</div>
                     <div class="text-[11px] text-slate-500 font-medium truncate" id="reactivate_meta">-</div>
                 </div>
+                <span class="text-[10px] font-black text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-1 rounded-lg">
+                    Reactivating
+                </span>
+            </div>
+
+            <!-- Route & Client Assignment Section -->
+            <div class="space-y-3 pt-2">
+                <div class="flex items-center gap-2 pb-1.5 border-b border-silver-600/70 text-emerald-800 font-extrabold text-xs uppercase tracking-wider">
+                    <i class="fa-solid fa-route"></i>
+                    <span>Customer Route Assignment</span>
+                </div>
+
+                <div>
+                    <label for="reactivate_route_action" class="block text-xs font-bold text-slate-700 mb-1">
+                        Select Client Assignment Option
+                    </label>
+                    <select id="reactivate_route_action" name="reactivate_route_action" onchange="toggleReactivateRouteContainers()"
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-silver-600 focus:border-emerald-600 outline-none text-xs sm:text-sm font-semibold transition bg-white">
+                        <option value="none">-- Keep Current Route (No reassignments) --</option>
+                        <?php if ($unassignedCount > 0): ?>
+                            <option value="assign_unassigned">+ Assign All Unassigned Clients (<?= $unassignedCount ?> clients available)</option>
+                            <option value="specific_clients">☑ Pick Specific Unassigned Clients to Assign...</option>
+                        <?php endif; ?>
+                        <option value="transfer_from">⇄ Transfer All Clients From Another Collector...</option>
+                    </select>
+                </div>
+
+                <!-- Transfer From Dropdown -->
+                <div id="reactivate_transfer_container" class="hidden p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl space-y-2">
+                    <label for="reactivate_transfer_from_id" class="block text-xs font-bold text-emerald-950">
+                        Transfer Route From:
+                    </label>
+                    <select id="reactivate_transfer_from_id" name="reactivate_transfer_from_id"
+                            class="w-full px-3 py-2 rounded-xl border border-silver-600 focus:border-emerald-600 outline-none text-xs font-semibold bg-white">
+                        <option value="">-- Select Source Collector --</option>
+                        <?php foreach ($collectors as $c): ?>
+                            <option value="<?= $c['id'] ?>" class="reactivate-transfer-col-opt" data-id="<?= $c['id'] ?>">
+                                <?= htmlspecialchars($c['full_name']) ?> (<?= $c['assigned_clients'] ?> clients currently)
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <p class="text-[11px] text-emerald-800">All clients of the selected agent will be transferred to this collector upon reactivation.</p>
+                </div>
+
+                <!-- Specific Unassigned Clients Picker -->
+                <?php if ($unassignedCount > 0): ?>
+                <div id="reactivate_specific_container" class="hidden p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
+                    <div class="flex items-center justify-between gap-2">
+                        <label class="text-xs font-bold text-slate-800">Select Unassigned Clients:</label>
+                        <div class="flex items-center gap-1.5 text-[11px]">
+                            <button type="button" onclick="selectAllReactivateClients(true)" class="text-emerald-700 font-bold hover:underline">Select All</button>
+                            <span class="text-slate-300">|</span>
+                            <button type="button" onclick="selectAllReactivateClients(false)" class="text-slate-500 font-medium hover:underline">Deselect</button>
+                        </div>
+                    </div>
+                    <input type="text" id="reactivate_client_filter" oninput="filterReactivateClients()" placeholder="Filter by client name or account #..."
+                           class="w-full px-3 py-1.5 rounded-lg border border-silver-600 text-xs outline-none bg-white">
+                    <div class="max-h-44 overflow-y-auto divide-y divide-slate-200 border border-slate-200 rounded-lg bg-white p-1" id="reactivate_clients_list">
+                        <?php foreach ($unassignedCustomers as $uc): ?>
+                            <label class="reactivate-client-item flex items-center justify-between p-2 hover:bg-slate-50 rounded cursor-pointer text-xs"
+                                   data-search="<?= strtolower($uc['full_name'] . ' ' . $uc['account_number'] . ' ' . ($uc['location'] ?? '')) ?>">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <input type="checkbox" name="reactivate_selected_customer_ids[]" value="<?= $uc['id'] ?>" class="reactivate-client-checkbox w-4 h-4 rounded text-emerald-600">
+                                    <span class="font-bold text-slate-800 truncate"><?= htmlspecialchars($uc['full_name']) ?></span>
+                                    <span class="text-[11px] font-mono text-slate-400">#<?= htmlspecialchars($uc['account_number']) ?></span>
+                                </div>
+                                <?php if (!empty($uc['location'])): ?>
+                                    <span class="text-[10px] text-slate-400 ml-2 truncate max-w-[120px]"><?= htmlspecialchars($uc['location']) ?></span>
+                                <?php endif; ?>
+                            </label>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+                <?php endif; ?>
             </div>
 
             <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 leading-relaxed flex items-start gap-2.5">
                 <i class="fa-solid fa-circle-info text-emerald-600 mt-0.5 text-xs flex-shrink-0"></i>
-                <span>Reactivating this account will restore mobile app sign-in capability and allow client assignments.</span>
+                <span>Reactivating will restore mobile app sign-in capability and apply any route assignments configured above.</span>
             </div>
 
             <!-- Form Actions -->
-            <form method="POST" action="collectors.php" class="pt-2 flex items-center gap-3">
-                <input type="hidden" name="action" value="reactivate_collector">
-                <input type="hidden" id="reactivate_collector_id" name="collector_id" value="">
-
+            <div class="pt-3 border-t border-silver-600 flex items-center gap-3 flex-shrink-0">
                 <button type="button" onclick="closeReactivateModal()"
                         class="flex-1 btn-touch px-4 py-2.5 bg-white text-slate-700 border border-silver-600 hover:bg-slate-50 text-xs font-bold rounded-xl transition flex items-center justify-center">
                     Cancel
@@ -644,10 +900,10 @@ require_once __DIR__ . '/includes/header.php';
                 <button type="submit"
                         class="flex-1 btn-touch px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold rounded-xl shadow-xs transition flex items-center justify-center gap-1.5">
                     <i class="fa-solid fa-rotate-left text-xs"></i>
-                    <span>Yes, Reactivate</span>
+                    <span>Yes, Reactivate Collector</span>
                 </button>
-            </form>
-        </div>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -691,11 +947,49 @@ function openEditModal(collector) {
     document.getElementById('edit_username').value = collector.username;
     document.getElementById('edit_new_password').value = '';
     document.getElementById('edit_is_active').checked = parseInt(collector.is_active) === 1;
+    document.getElementById('edit_assigned_count').textContent = collector.assigned_clients || '0';
+
+    // Reset route action dropdown
+    const routeSelect = document.getElementById('edit_route_action');
+    if (routeSelect) {
+        routeSelect.value = 'none';
+        toggleEditRouteContainers();
+    }
+
+    // Hide self from transfer options
+    document.querySelectorAll('.edit-transfer-col-opt').forEach(opt => {
+        opt.style.display = (opt.getAttribute('data-id') == collector.id) ? 'none' : '';
+    });
 
     showModal('edit_modal', 'edit_modal_box');
 }
 function closeEditModal() {
     hideModal('edit_modal', 'edit_modal_box');
+}
+
+function toggleEditRouteContainers() {
+    const action = document.getElementById('edit_route_action')?.value || 'none';
+    const transContainer = document.getElementById('edit_transfer_container');
+    const specContainer = document.getElementById('edit_specific_container');
+
+    if (transContainer) transContainer.classList.toggle('hidden', action !== 'transfer_from');
+    if (specContainer) specContainer.classList.toggle('hidden', action !== 'specific_clients');
+}
+
+function filterEditClients() {
+    const q = document.getElementById('edit_client_filter')?.value.toLowerCase().trim() || '';
+    document.querySelectorAll('.edit-client-item').forEach(item => {
+        const text = item.getAttribute('data-search') || '';
+        item.style.display = text.includes(q) ? '' : 'none';
+    });
+}
+
+function selectAllEditClients(checked) {
+    document.querySelectorAll('.edit-client-checkbox').forEach(cb => {
+        if (cb.closest('.edit-client-item').style.display !== 'none') {
+            cb.checked = checked;
+        }
+    });
 }
 
 function openDeactivateModal(collector) {
@@ -705,11 +999,7 @@ function openDeactivateModal(collector) {
 
     // Hide self from reassignment options
     document.querySelectorAll('.collector-option-item').forEach(opt => {
-        if (opt.getAttribute('data-id') == collector.id) {
-            opt.style.display = 'none';
-        } else {
-            opt.style.display = '';
-        }
+        opt.style.display = (opt.getAttribute('data-id') == collector.id) ? 'none' : '';
     });
 
     showModal('deactivate_modal', 'deact_modal_box');
@@ -726,10 +1016,47 @@ function openReactivateModal(collector) {
     const initials = collector.full_name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
     document.getElementById('reactivate_avatar').textContent = initials || 'CO';
 
+    // Reset route action dropdown
+    const routeSelect = document.getElementById('reactivate_route_action');
+    if (routeSelect) {
+        routeSelect.value = 'none';
+        toggleReactivateRouteContainers();
+    }
+
+    // Hide self from transfer options
+    document.querySelectorAll('.reactivate-transfer-col-opt').forEach(opt => {
+        opt.style.display = (opt.getAttribute('data-id') == collector.id) ? 'none' : '';
+    });
+
     showModal('reactivate_modal', 'reactivate_modal_box');
 }
 function closeReactivateModal() {
     hideModal('reactivate_modal', 'reactivate_modal_box');
+}
+
+function toggleReactivateRouteContainers() {
+    const action = document.getElementById('reactivate_route_action')?.value || 'none';
+    const transContainer = document.getElementById('reactivate_transfer_container');
+    const specContainer = document.getElementById('reactivate_specific_container');
+
+    if (transContainer) transContainer.classList.toggle('hidden', action !== 'transfer_from');
+    if (specContainer) specContainer.classList.toggle('hidden', action !== 'specific_clients');
+}
+
+function filterReactivateClients() {
+    const q = document.getElementById('reactivate_client_filter')?.value.toLowerCase().trim() || '';
+    document.querySelectorAll('.reactivate-client-item').forEach(item => {
+        const text = item.getAttribute('data-search') || '';
+        item.style.display = text.includes(q) ? '' : 'none';
+    });
+}
+
+function selectAllReactivateClients(checked) {
+    document.querySelectorAll('.reactivate-client-checkbox').forEach(cb => {
+        if (cb.closest('.reactivate-client-item').style.display !== 'none') {
+            cb.checked = checked;
+        }
+    });
 }
 
 // Global modal esc and backdrop click listeners
