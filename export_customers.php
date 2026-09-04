@@ -10,7 +10,7 @@ $pdo = get_db_connection();
 
 // Fetch all active customers with collector details, ordered alphabetically by name
 $stmt = $pdo->query("
-    SELECT c.id, c.account_number, c.full_name, c.phone, c.location,
+    SELECT c.id, c.account_number, c.full_name, c.gender, c.phone, c.location,
            u.full_name as collector_name
     FROM customers c
     LEFT JOIN users u ON c.assigned_collector_id = u.id
@@ -40,6 +40,7 @@ fputcsv($output, [
     'Current Account Number',
     'New Account Number',
     'Full Name',
+    'Gender',
     'Phone Number',
     'Location / Stall',
     'Assigned Collector'
@@ -52,6 +53,7 @@ foreach ($customers as $c) {
         $c['account_number'],
         '', // Blank column for admin to enter corrections
         $c['full_name'],
+        $c['gender'] ?? '',
         $c['phone'],
         $c['location'] ?? '',
         $c['collector_name'] ?? 'Unassigned'

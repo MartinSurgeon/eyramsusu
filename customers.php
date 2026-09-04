@@ -16,6 +16,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $customerId = (int)($_POST['customer_id'] ?? 0);
     $accountNumber = trim($_POST['account_number'] ?? '');
     $fullName = trim($_POST['full_name'] ?? '');
+    $gender = trim($_POST['gender'] ?? '');
+    if (!in_array($gender, ['M', 'F'])) {
+        $gender = null;
+    }
     $phone = trim($_POST['phone'] ?? '');
     $location = trim($_POST['location'] ?? '');
     $collectorId = !empty($_POST['assigned_collector_id']) ? (int)$_POST['assigned_collector_id'] : null;
@@ -24,11 +28,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $accountDigits = preg_replace('/[^0-9]/', '', $accountNumber);
     $phoneDigits = preg_replace('/[^0-9]/', '', $phone);
 
-    if ($customerId <= 0 || empty($accountNumber) || empty($fullName) || empty($phone)) {
-        set_flash_message('error', 'Account Number, full name, and phone number are required.');
+    if ($customerId <= 0 || empty($accountNumber) || empty($fullName)) {
+        set_flash_message('error', 'Account Number and full name are required.');
     } elseif ($accountNumber !== $accountDigits) {
         set_flash_message('error', 'Account Number must contain numbers only (digits 0-9).');
-    } elseif ($phone !== $phoneDigits || strlen($phoneDigits) < 10 || strlen($phoneDigits) > 15) {
+    } elseif (!empty($phone) && ($phone !== $phoneDigits || strlen($phoneDigits) < 10 || strlen($phoneDigits) > 15)) {
         set_flash_message('error', 'Phone number must contain numbers only (10 to 15 digits).');
     } else {
         // Check for duplicate account number on other customers
@@ -42,13 +46,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             try {
                 $pdo->beginTransaction();
 
-                // Update customer profile including account_number
+                // Update customer profile including account_number and gender
                 $stmtUpd = $pdo->prepare("
                     UPDATE customers 
-                    SET account_number = ?, full_name = ?, phone = ?, location = ?, assigned_collector_id = ?
+                    SET account_number = ?, full_name = ?, gender = ?, phone = ?, location = ?, assigned_collector_id = ?
                     WHERE id = ?
                 ");
-                $stmtUpd->execute([$accountDigits, $fullName, $phoneDigits, $location, $collectorId, $customerId]);
+                $stmtUpd->execute([$accountDigits, $fullName, $gender, $phoneDigits, $location, $collectorId, $customerId]);
 
                 // If new daily rate provided, update active card
                 if ($newDailyAmount !== null && $newDailyAmount > 0) {
@@ -81,63 +85,86 @@ if ($user['role'] === 'admin') {
     $collectorsList = $stmtCol->fetchAll();
 }
 
+// Compute overall customer metrics (for directory KPI summary cards)
+if ($user['role'] === 'collector') {
+    $metricsStmt = $pdo->prepare("
+        SELECT 
+            COUNT(*) as total_customers,
+            COUNT(DISTINCT CASE WHEN sc.id IS NOT NULL THEN c.id END) as active_card_customers
+        FROM customers c
+        LEFT JOIN susu_cards sc ON c.id = sc.customer_id AND sc.status = 'active'
+        WHERE c.assigned_collector_id = ? AND c.is_active = 1
+    ");
+    $metricsStmt->execute([$user['id']]);
+} else {
+    $metricsStmt = $pdo->query("
+        SELECT 
+            COUNT(*) as total_customers,
+            COUNT(DISTINCT CASE WHEN sc.id IS NOT NULL THEN c.id END) as active_card_customers
+        FROM customers c
+        LEFT JOIN susu_cards sc ON c.id = sc.customer_id AND sc.status = 'active'
+        WHERE c.is_active = 1
+    ");
+}
+$customerMetrics = $metricsStmt->fetch(PDO::FETCH_ASSOC) ?: ['total_customers' => 0, 'active_card_customers' => 0];
+$totalCustomersCount = (int)$customerMetrics['total_customers'];
+$activeCardsCount = (int)$customerMetrics['active_card_customers'];
+$noCardsCount = max(0, $totalCustomersCount - $activeCardsCount);
+
+// Status filter parameter support ('all', 'active', 'no_card')
+$statusFilter = trim($_GET['status_filter'] ?? $_GET['filter'] ?? 'all');
+if (!in_array($statusFilter, ['all', 'active', 'no_card'])) {
+    $statusFilter = 'all';
+}
+
 // Search Query parameter support (server-side & URL fallback)
 $searchQuery = trim($_GET['search'] ?? $_GET['q'] ?? '');
+
+$whereClauses = ["c.is_active = 1"];
+$params = [];
+
+if ($user['role'] === 'collector') {
+    $whereClauses[] = "c.assigned_collector_id = ?";
+    $params[] = $user['id'];
+}
+
+if ($statusFilter === 'active') {
+    $whereClauses[] = "sc.id IS NOT NULL";
+} elseif ($statusFilter === 'no_card') {
+    $whereClauses[] = "sc.id IS NULL";
+}
 
 if ($searchQuery !== '') {
     $searchWildcard = '%' . $searchQuery . '%';
     if ($user['role'] === 'collector') {
-        $stmt = $pdo->prepare("
-            SELECT c.*, u.full_name as collector_name,
-                   sc.id as card_id, sc.card_number, sc.daily_amount, sc.spaces_filled, sc.total_spaces, sc.total_saved, sc.status as card_status
-            FROM customers c
-            LEFT JOIN users u ON c.assigned_collector_id = u.id
-            LEFT JOIN susu_cards sc ON c.id = sc.customer_id AND sc.status = 'active'
-            WHERE c.assigned_collector_id = ? AND c.is_active = 1
-              AND (c.full_name LIKE ? OR c.account_number LIKE ? OR c.phone LIKE ? OR c.location LIKE ?)
-            ORDER BY c.full_name ASC
-        ");
-        $stmt->execute([$user['id'], $searchWildcard, $searchWildcard, $searchWildcard, $searchWildcard]);
+        $whereClauses[] = "(c.full_name LIKE ? OR c.account_number LIKE ? OR c.phone LIKE ? OR c.location LIKE ?)";
+        $params[] = $searchWildcard;
+        $params[] = $searchWildcard;
+        $params[] = $searchWildcard;
+        $params[] = $searchWildcard;
     } else {
-        $stmt = $pdo->prepare("
-            SELECT c.*, u.full_name as collector_name,
-                   sc.id as card_id, sc.card_number, sc.daily_amount, sc.spaces_filled, sc.total_spaces, sc.total_saved, sc.status as card_status
-            FROM customers c
-            LEFT JOIN users u ON c.assigned_collector_id = u.id
-            LEFT JOIN susu_cards sc ON c.id = sc.customer_id AND sc.status = 'active'
-            WHERE c.is_active = 1
-              AND (c.full_name LIKE ? OR c.account_number LIKE ? OR c.phone LIKE ? OR c.location LIKE ? OR u.full_name LIKE ?)
-            ORDER BY c.full_name ASC
-        ");
-        $stmt->execute([$searchWildcard, $searchWildcard, $searchWildcard, $searchWildcard, $searchWildcard]);
-    }
-} else {
-    // If collector, show their assigned customers by default
-    if ($user['role'] === 'collector') {
-        $stmt = $pdo->prepare("
-            SELECT c.*, u.full_name as collector_name,
-                   sc.id as card_id, sc.card_number, sc.daily_amount, sc.spaces_filled, sc.total_spaces, sc.total_saved, sc.status as card_status
-            FROM customers c
-            LEFT JOIN users u ON c.assigned_collector_id = u.id
-            LEFT JOIN susu_cards sc ON c.id = sc.customer_id AND sc.status = 'active'
-            WHERE c.assigned_collector_id = ? AND c.is_active = 1
-            ORDER BY c.full_name ASC
-        ");
-        $stmt->execute([$user['id']]);
-    } else {
-        // Admin sees all customers
-        $stmt = $pdo->query("
-            SELECT c.*, u.full_name as collector_name,
-                   sc.id as card_id, sc.card_number, sc.daily_amount, sc.spaces_filled, sc.total_spaces, sc.total_saved, sc.status as card_status
-            FROM customers c
-            LEFT JOIN users u ON c.assigned_collector_id = u.id
-            LEFT JOIN susu_cards sc ON c.id = sc.customer_id AND sc.status = 'active'
-            WHERE c.is_active = 1
-            ORDER BY c.full_name ASC
-        ");
+        $whereClauses[] = "(c.full_name LIKE ? OR c.account_number LIKE ? OR c.phone LIKE ? OR c.location LIKE ? OR u.full_name LIKE ?)";
+        $params[] = $searchWildcard;
+        $params[] = $searchWildcard;
+        $params[] = $searchWildcard;
+        $params[] = $searchWildcard;
+        $params[] = $searchWildcard;
     }
 }
 
+$whereSql = implode(" AND ", $whereClauses);
+
+$sql = "
+    SELECT c.*, u.full_name as collector_name,
+           sc.id as card_id, sc.card_number, sc.daily_amount, sc.spaces_filled, sc.total_spaces, sc.total_saved, sc.status as card_status
+    FROM customers c
+    LEFT JOIN users u ON c.assigned_collector_id = u.id
+    LEFT JOIN susu_cards sc ON c.id = sc.customer_id AND sc.status = 'active'
+    WHERE {$whereSql}
+    ORDER BY c.full_name ASC
+";
+$stmt = $pdo->prepare($sql);
+$stmt->execute($params);
 $allCustomers = $stmt->fetchAll();
 
 // Pagination setup
@@ -174,11 +201,74 @@ require_once __DIR__ . '/includes/header.php';
         </div>
     </div>
 
+    <!-- Customer Metrics KPI Cards (Total Customers & Total with Active Card) -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+        <!-- 1: Total Registered Customers -->
+        <a href="customers.php" 
+           class="p-4 rounded-2xl bg-white border <?= $statusFilter === 'all' && empty($searchQuery) ? 'border-steel_azure ring-2 ring-steel_azure/20 shadow-sm' : 'border-silver-600 shadow-2xs hover:border-steel_azure/50' ?> transition flex items-center justify-between group cursor-pointer">
+            <div class="flex items-center gap-3.5">
+                <div class="w-11 h-11 rounded-xl bg-blue-50 text-steel_azure flex items-center justify-center text-lg font-bold group-hover:scale-105 transition flex-shrink-0">
+                    <i class="fa-solid fa-users"></i>
+                </div>
+                <div>
+                    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Total Customers</span>
+                    <div class="text-xl sm:text-2xl font-black text-steel_azure leading-tight">
+                        <?= number_format($totalCustomersCount) ?>
+                    </div>
+                </div>
+            </div>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full <?= $statusFilter === 'all' ? 'bg-steel_azure text-white' : 'bg-slate-100 text-slate-500' ?>">
+                All (<?= $totalCustomersCount ?>)
+            </span>
+        </a>
+
+        <!-- 2: Total Customers with Active Card -->
+        <a href="customers.php?filter=active" 
+           class="p-4 rounded-2xl bg-white border <?= $statusFilter === 'active' ? 'border-emerald-600 ring-2 ring-emerald-600/20 shadow-sm' : 'border-silver-600 shadow-2xs hover:border-emerald-500/50' ?> transition flex items-center justify-between group cursor-pointer">
+            <div class="flex items-center gap-3.5">
+                <div class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg font-bold group-hover:scale-105 transition flex-shrink-0">
+                    <i class="fa-solid fa-id-card"></i>
+                </div>
+                <div>
+                    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">With Active Card</span>
+                    <div class="text-xl sm:text-2xl font-black text-emerald-600 leading-tight">
+                        <?= number_format($activeCardsCount) ?>
+                    </div>
+                </div>
+            </div>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full <?= $statusFilter === 'active' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700 border border-emerald-200' ?>">
+                Active (<?= $activeCardsCount ?>)
+            </span>
+        </a>
+
+        <!-- 3: Total Customers without Card -->
+        <a href="customers.php?filter=no_card" 
+           class="p-4 rounded-2xl bg-white border <?= $statusFilter === 'no_card' ? 'border-pumpkin_spice ring-2 ring-pumpkin_spice/20 shadow-sm' : 'border-silver-600 shadow-2xs hover:border-pumpkin_spice/50' ?> transition flex items-center justify-between group cursor-pointer">
+            <div class="flex items-center gap-3.5">
+                <div class="w-11 h-11 rounded-xl bg-orange-50 text-pumpkin_spice flex items-center justify-center text-lg font-bold group-hover:scale-105 transition flex-shrink-0">
+                    <i class="fa-solid fa-user-clock"></i>
+                </div>
+                <div>
+                    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Without Active Card</span>
+                    <div class="text-xl sm:text-2xl font-black text-pumpkin_spice leading-tight">
+                        <?= number_format($noCardsCount) ?>
+                    </div>
+                </div>
+            </div>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full <?= $statusFilter === 'no_card' ? 'bg-pumpkin_spice text-white' : 'bg-orange-50 text-pumpkin_spice border border-orange-200' ?>">
+                Pending (<?= $noCardsCount ?>)
+            </span>
+        </a>
+    </div>
+
     <!-- Search & Filter Card -->
     <div class="bg-white rounded-2xl border border-silver-600 shadow-sm overflow-hidden">
         
         <div class="p-4 sm:p-5 border-b border-silver-600/70 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <form method="GET" action="customers.php" class="w-full sm:max-w-md relative" id="customer_search_form">
+                <?php if ($statusFilter !== 'all'): ?>
+                    <input type="hidden" name="filter" value="<?= htmlspecialchars($statusFilter) ?>">
+                <?php endif; ?>
                 <input type="text" id="customer_search" name="search" value="<?= htmlspecialchars($searchQuery) ?>" 
                        autocomplete="off"
                        placeholder="Search name, account, phone, location... (Press /)"
@@ -193,18 +283,24 @@ require_once __DIR__ . '/includes/header.php';
                     <span class="hidden sm:inline-block text-[10px] font-mono text-slate-400 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded">/</span>
                 </div>
             </form>
-            <div class="flex items-center gap-2 text-xs font-semibold text-slate-600">
-                <span>Total Registered:</span>
+            <div class="flex items-center gap-2 text-xs font-semibold text-slate-600 flex-wrap">
+                <span>Showing:</span>
                 <span class="px-2.5 py-0.5 rounded-full bg-steel_azure text-white font-extrabold text-xs" id="total_customers_count">
                     <?= $pagedData['total'] ?> clients
                 </span>
             </div>
         </div>
 
-        <?php if (!empty($searchQuery)): ?>
-            <div id="search_filter_banner" class="px-4 py-2 bg-blue-50/70 border-b border-blue-100 flex items-center justify-between text-xs">
+        <?php if (!empty($searchQuery) || $statusFilter !== 'all'): ?>
+            <div id="search_filter_banner" class="px-4 py-2.5 bg-blue-50/70 border-b border-blue-100 flex items-center justify-between text-xs flex-wrap gap-2">
                 <span class="text-steel_azure font-semibold">
-                    Search results for <strong class="text-slate-800">"<?= htmlspecialchars($searchQuery) ?>"</strong> (<?= $pagedData['total'] ?> found)
+                    <?php if (!empty($searchQuery) && $statusFilter !== 'all'): ?>
+                        Showing <strong class="text-slate-800"><?= $statusFilter === 'active' ? 'Clients with Active Card' : 'Clients without Active Card' ?></strong> matching <strong class="text-slate-800">"<?= htmlspecialchars($searchQuery) ?>"</strong> (<?= $pagedData['total'] ?> found)
+                    <?php elseif (!empty($searchQuery)): ?>
+                        Search results for <strong class="text-slate-800">"<?= htmlspecialchars($searchQuery) ?>"</strong> (<?= $pagedData['total'] ?> found)
+                    <?php else: ?>
+                        Filtered to: <strong class="text-slate-800"><?= $statusFilter === 'active' ? 'Clients with Active Card' : 'Clients without Active Card' ?></strong> (<?= $pagedData['total'] ?> clients)
+                    <?php endif; ?>
                 </span>
                 <a href="customers.php" class="text-pumpkin_spice hover:underline font-bold inline-flex items-center gap-1">
                     <i class="fa-solid fa-xmark text-xs"></i>
@@ -254,13 +350,20 @@ require_once __DIR__ . '/includes/header.php';
                             <tr class="customer-row hover:bg-platinum-800 transition"
                                 data-search="<?= htmlspecialchars($c['full_name'] . ' ' . $c['account_number'] . ' ' . $c['phone'] . ' ' . $c['location'] . ' ' . $c['collector_name']) ?>">
                                 <td class="py-3 px-4">
-                                    <div class="font-bold text-slate-800 text-sm"><?= htmlspecialchars($c['full_name']) ?></div>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="font-bold text-slate-800 text-sm"><?= htmlspecialchars($c['full_name']) ?></span>
+                                        <?php if (!empty($c['gender'])): ?>
+                                            <span class="px-1.5 py-0.5 text-[9px] font-black rounded-md uppercase tracking-wider <?= $c['gender'] === 'F' ? 'bg-pink-50 text-pink-700 border border-pink-200' : 'bg-blue-50 text-blue-700 border border-blue-200' ?>" title="Gender: <?= $c['gender'] === 'F' ? 'Female' : 'Male' ?>">
+                                                <?= htmlspecialchars($c['gender']) ?>
+                                            </span>
+                                        <?php endif; ?>
+                                    </div>
                                     <div class="text-[11px] font-semibold text-slate-400 font-mono"><?= htmlspecialchars($c['account_number']) ?></div>
                                 </td>
                                 <td class="py-3 px-4 text-slate-600">
                                     <div class="flex items-center gap-1.5">
                                         <i class="fa-solid fa-phone text-slate-400 text-[11px]"></i>
-                                        <span><?= htmlspecialchars($c['phone']) ?></span>
+                                        <span><?= htmlspecialchars($c['phone'] ?: '—') ?></span>
                                     </div>
                                     <div class="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5">
                                         <i class="fa-solid fa-location-dot text-slate-400 text-[11px]"></i>
@@ -298,8 +401,8 @@ require_once __DIR__ . '/includes/header.php';
                                         <?= format_money($c['change_balance']) ?>
                                     </span>
                                 </td>
-                                <td class="py-3 px-4 text-right whitespace-nowrap">
-                                    <div class="flex items-center justify-end gap-2">
+                                <td class="py-3 px-4 text-right">
+                                    <div class="flex items-center justify-end gap-1.5">
                                         <?php if ($c['card_id']): ?>
                                             <a href="record_deposit.php?customer_id=<?= $c['id'] ?>" class="btn-touch px-3 py-1.5 bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-bold rounded-xl shadow-2xs transition inline-flex items-center gap-1.5">
                                                 <i class="fa-solid fa-plus text-xs"></i>
@@ -325,6 +428,7 @@ require_once __DIR__ . '/includes/header.php';
                                                     onclick='openEditCustomerModal(<?= htmlspecialchars(json_encode([
                                                         'id' => $c['id'],
                                                         'full_name' => $c['full_name'],
+                                                        'gender' => $c['gender'] ?? '',
                                                         'account_number' => $c['account_number'],
                                                         'phone' => $c['phone'],
                                                         'location' => $c['location'],
@@ -359,8 +463,15 @@ require_once __DIR__ . '/includes/header.php';
                      data-search="<?= htmlspecialchars($c['full_name'] . ' ' . $c['account_number'] . ' ' . $c['phone'] . ' ' . $c['location'] . ' ' . $c['collector_name']) ?>">
                     <div class="flex items-center justify-between">
                         <div>
-                            <div class="font-extrabold text-sm text-slate-800"><?= htmlspecialchars($c['full_name']) ?></div>
-                            <div class="text-[11px] text-slate-500 font-mono"><?= htmlspecialchars($c['account_number']) ?> &bull; <?= htmlspecialchars($c['phone']) ?></div>
+                            <div class="flex items-center gap-1.5">
+                                <span class="font-extrabold text-sm text-slate-800"><?= htmlspecialchars($c['full_name']) ?></span>
+                                <?php if (!empty($c['gender'])): ?>
+                                    <span class="px-1.5 py-0.5 text-[9px] font-black rounded-md uppercase tracking-wider <?= $c['gender'] === 'F' ? 'bg-pink-50 text-pink-700 border border-pink-200' : 'bg-blue-50 text-blue-700 border border-blue-200' ?>" title="Gender: <?= $c['gender'] === 'F' ? 'Female' : 'Male' ?>">
+                                        <?= htmlspecialchars($c['gender']) ?>
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+                            <div class="text-[11px] text-slate-500 font-mono"><?= htmlspecialchars($c['account_number']) ?> &bull; <?= htmlspecialchars($c['phone'] ?: 'No phone') ?></div>
                         </div>
                         <?php if ($c['card_id']): ?>
                             <span class="text-xs font-bold text-steel_azure bg-platinum px-2 py-0.5 rounded border border-silver-600">
@@ -404,6 +515,7 @@ require_once __DIR__ . '/includes/header.php';
                                     onclick='openEditCustomerModal(<?= htmlspecialchars(json_encode([
                                         'id' => $c['id'],
                                         'full_name' => $c['full_name'],
+                                        'gender' => $c['gender'] ?? '',
                                         'account_number' => $c['account_number'],
                                         'phone' => $c['phone'],
                                         'location' => $c['location'],
@@ -499,14 +611,24 @@ window.eyramConfig = {
                            class="w-full px-3.5 py-2.5 rounded-xl border border-silver-600 focus:border-steel_azure outline-none text-xs sm:text-sm text-slate-800 font-semibold transition">
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                    <!-- Gender -->
+                    <div>
+                        <label for="edit_gender" class="block font-bold text-slate-700 mb-1">Gender</label>
+                        <select id="edit_gender" name="gender" class="w-full px-3.5 py-2.5 rounded-xl border border-silver-600 focus:border-steel_azure outline-none text-xs sm:text-sm text-slate-800 font-semibold transition bg-white">
+                            <option value="">-- Select --</option>
+                            <option value="F">Female (F)</option>
+                            <option value="M">Male (M)</option>
+                        </select>
+                    </div>
+
                     <!-- Phone Number -->
                     <div>
                         <label for="edit_phone" class="block font-bold text-slate-700 mb-1">
-                            Phone Number *
+                            Phone Number
                             <span class="text-[10px] text-slate-400 font-normal ml-1">(Numbers only)</span>
                         </label>
-                        <input type="tel" id="edit_phone" name="phone" required
+                        <input type="tel" id="edit_phone" name="phone"
                                inputmode="numeric"
                                pattern="[0-9]{10,15}"
                                maxlength="15"
@@ -518,7 +640,7 @@ window.eyramConfig = {
 
                     <!-- Location -->
                     <div>
-                        <label for="edit_location" class="block font-bold text-slate-700 mb-1">Location / Market Stall</label>
+                        <label for="edit_location" class="block font-bold text-slate-700 mb-1">Location / Stall</label>
                         <input type="text" id="edit_location" name="location"
                                class="w-full px-3.5 py-2.5 rounded-xl border border-silver-600 focus:border-steel_azure outline-none text-xs sm:text-sm text-slate-800 font-semibold transition">
                     </div>
@@ -580,6 +702,10 @@ window.eyramConfig = {
                         <span class="font-extrabold text-slate-800" id="confirm_name">-</span>
                     </div>
                     <div class="flex items-center justify-between">
+                        <span class="text-slate-500 font-semibold">Gender:</span>
+                        <span class="font-bold text-slate-800" id="confirm_gender">-</span>
+                    </div>
+                    <div class="flex items-center justify-between">
                         <span class="text-slate-500 font-semibold">Phone:</span>
                         <span class="font-bold text-slate-800 font-mono" id="confirm_phone">-</span>
                     </div>
@@ -624,6 +750,9 @@ function openEditCustomerModal(data) {
     const accInput = document.getElementById('edit_account_number');
     if (accInput) accInput.value = data.account_number || '';
     document.getElementById('edit_full_name').value = data.full_name || '';
+    if (document.getElementById('edit_gender')) {
+        document.getElementById('edit_gender').value = data.gender || '';
+    }
     document.getElementById('edit_phone').value = data.phone || '';
     document.getElementById('edit_location').value = data.location || '';
     document.getElementById('edit_collector_id').value = data.collector_id || '';
@@ -676,9 +805,11 @@ function goToConfirmationStep() {
     if (accInput) accInput.value = accountNum;
 
     const name = document.getElementById('edit_full_name').value.trim();
+    const genderSelect = document.getElementById('edit_gender');
+    const gender = genderSelect ? genderSelect.value : '';
     const phoneInput = document.getElementById('edit_phone');
-    const phone = phoneInput.value.trim().replace(/[^0-9]/g, '');
-    phoneInput.value = phone;
+    const phone = phoneInput ? phoneInput.value.trim().replace(/[^0-9]/g, '') : '';
+    if (phoneInput) phoneInput.value = phone;
     const location = document.getElementById('edit_location').value.trim() || 'Not specified';
     const collectorSelect = document.getElementById('edit_collector_id');
     const collectorText = collectorSelect.options[collectorSelect.selectedIndex]?.text || 'Unassigned';
@@ -692,8 +823,8 @@ function goToConfirmationStep() {
         alert('Please enter customer full name.');
         return;
     }
-    if (!phone || phone.length < 10 || phone.length > 15) {
-        alert('Phone number must contain numbers only (at least 10 digits, e.g. 0244123456).');
+    if (phone && (phone.length < 10 || phone.length > 15)) {
+        alert('Phone number must contain between 10 and 15 digits (e.g. 0244123456).');
         return;
     }
 
@@ -707,7 +838,11 @@ function goToConfirmationStep() {
         }
     }
     document.getElementById('confirm_name').textContent = name;
-    document.getElementById('confirm_phone').textContent = phone;
+    const confirmGender = document.getElementById('confirm_gender');
+    if (confirmGender) {
+        confirmGender.textContent = gender === 'F' ? 'Female (F)' : (gender === 'M' ? 'Male (M)' : 'Not specified');
+    }
+    document.getElementById('confirm_phone').textContent = phone || '—';
     document.getElementById('confirm_location').textContent = location;
     document.getElementById('confirm_collector').textContent = collectorText;
 

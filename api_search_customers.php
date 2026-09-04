@@ -27,7 +27,7 @@ try {
     if ($user['role'] === 'collector') {
         // Collector only searches their assigned active clients
         $sql = "
-            SELECT c.id, c.account_number, c.full_name, c.phone, c.location, c.change_balance,
+            SELECT c.id, c.account_number, c.full_name, c.gender, c.phone, c.location, c.change_balance,
                    c.assigned_collector_id, u.full_name AS collector_name,
                    sc.id AS card_id, sc.card_number, sc.daily_amount, sc.spaces_filled, 
                    sc.total_spaces, sc.total_saved, sc.status AS card_status
@@ -56,7 +56,7 @@ try {
     } else {
         // Admin searches all active clients across the entire database
         $sql = "
-            SELECT c.id, c.account_number, c.full_name, c.phone, c.location, c.change_balance,
+            SELECT c.id, c.account_number, c.full_name, c.gender, c.phone, c.location, c.change_balance,
                    c.assigned_collector_id, u.full_name AS collector_name,
                    sc.id AS card_id, sc.card_number, sc.daily_amount, sc.spaces_filled, 
                    sc.total_spaces, sc.total_saved, sc.status AS card_status

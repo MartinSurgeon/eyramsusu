@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS customers (
     id INT AUTO_INCREMENT PRIMARY KEY,
     account_number VARCHAR(20) UNIQUE NOT NULL,
     full_name VARCHAR(100) NOT NULL,
+    gender VARCHAR(10) NULL,
     phone VARCHAR(20) NOT NULL,
     location VARCHAR(255) NULL,
     assigned_collector_id INT NULL,

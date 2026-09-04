@@ -28,6 +28,10 @@ try {
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     $accountNumber = trim($_POST['account_number'] ?? '');
     $fullName = trim($_POST['full_name'] ?? '');
+    $gender = trim($_POST['gender'] ?? '');
+    if (!in_array($gender, ['M', 'F'])) {
+        $gender = null;
+    }
     $phone = trim($_POST['phone'] ?? '');
     $location = trim($_POST['location'] ?? '');
     $collectorId = !empty($_POST['assigned_collector_id']) ? (int)$_POST['assigned_collector_id'] : null;
@@ -61,12 +65,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             try {
                 $pdo->beginTransaction();
 
-                // Insert Customer with manual Account Number
+                // Insert Customer with manual Account Number and Gender
                 $stmt = $pdo->prepare("
-                    INSERT INTO customers (account_number, full_name, phone, location, assigned_collector_id, change_balance) 
-                    VALUES (?, ?, ?, ?, ?, 0.00)
+                    INSERT INTO customers (account_number, full_name, gender, phone, location, assigned_collector_id, change_balance) 
+                    VALUES (?, ?, ?, ?, ?, ?, 0.00)
                 ");
-                $stmt->execute([$accountDigits, $fullName, $phoneDigits, $location, $collectorId]);
+                $stmt->execute([$accountDigits, $fullName, $gender, $phoneDigits, $location, $collectorId]);
                 $customerId = $pdo->lastInsertId();
 
                 // Create initial 31-Space Susu Card
@@ -207,7 +211,24 @@ require_once __DIR__ . '/includes/header.php';
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                        <label for="gender" class="block text-xs font-bold text-slate-700 mb-1">
+                            Gender
+                        </label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                                <i class="fa-solid fa-venus-mars text-xs"></i>
+                            </span>
+                            <select id="gender" name="gender" onchange="updateReviewSummary()"
+                                    class="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-silver-600 focus:border-steel_azure focus:ring-2 focus:ring-cornflower_ocean-800 outline-none text-xs sm:text-sm transition font-semibold bg-white">
+                                <option value="">-- Select --</option>
+                                <option value="F" <?= (($_POST['gender'] ?? '') === 'F') ? 'selected' : '' ?>>Female (F)</option>
+                                <option value="M" <?= (($_POST['gender'] ?? '') === 'M') ? 'selected' : '' ?>>Male (M)</option>
+                            </select>
+                        </div>
+                    </div>
+
                     <div>
                         <label for="phone" class="block text-xs font-bold text-slate-700 mb-1">
                             Phone Number <span class="text-red-500">*</span>
@@ -227,7 +248,7 @@ require_once __DIR__ . '/includes/header.php';
                                    class="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-silver-600 focus:border-steel_azure focus:ring-2 focus:ring-cornflower_ocean-800 outline-none text-xs sm:text-sm transition font-mono"
                                    placeholder="e.g. 0244123456">
                         </div>
-                        <p class="text-[10px] text-slate-400 mt-1">10 to 15 digits. Numbers only (no text).</p>
+                        <p class="text-[10px] text-slate-400 mt-1">10 to 15 digits. Numbers only.</p>
                     </div>
 
                     <div>
@@ -338,6 +359,10 @@ require_once __DIR__ . '/includes/header.php';
                     <div>
                         <span class="text-slate-400 font-medium">Customer:</span>
                         <div id="summary_name" class="font-bold text-slate-800 truncate">—</div>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 font-medium">Gender:</span>
+                        <div id="summary_gender" class="font-bold text-slate-800 truncate">—</div>
                     </div>
                     <div>
                         <span class="text-slate-400 font-medium">Phone:</span>
@@ -505,6 +530,8 @@ function setDailyAmount(amount) {
 function updateReviewSummary() {
     const account = document.getElementById('account_number').value.trim() || '—';
     const name = document.getElementById('full_name').value.trim() || '—';
+    const genderSelect = document.getElementById('gender');
+    const genderText = genderSelect && genderSelect.value === 'F' ? 'Female (F)' : (genderSelect && genderSelect.value === 'M' ? 'Male (M)' : '—');
     const phone = document.getElementById('phone').value.trim() || '—';
     const collectorSelect = document.getElementById('assigned_collector_id');
     const collectorText = collectorSelect.selectedIndex > 0 ? collectorSelect.options[collectorSelect.selectedIndex].text : 'Unassigned (Office)';
@@ -513,6 +540,9 @@ function updateReviewSummary() {
 
     document.getElementById('summary_account').textContent = account;
     document.getElementById('summary_name').textContent = name;
+    if (document.getElementById('summary_gender')) {
+        document.getElementById('summary_gender').textContent = genderText;
+    }
     document.getElementById('summary_phone').textContent = phone;
     document.getElementById('summary_collector').textContent = collectorText;
     document.getElementById('summary_target').textContent = 'GH₵ ' + target.toFixed(2);

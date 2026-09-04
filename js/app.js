@@ -426,22 +426,32 @@ function initCustomerFilter() {
                 `;
             }
 
+            let genderBadge = '';
+            if (c.gender) {
+                const isF = c.gender === 'F';
+                const badgeClass = isF ? 'bg-pink-50 text-pink-700 border border-pink-200' : 'bg-blue-50 text-blue-700 border border-blue-200';
+                genderBadge = `<span class="px-1.5 py-0.5 text-[9px] font-black rounded-md uppercase tracking-wider ${badgeClass}" title="Gender: ${isF ? 'Female' : 'Male'}">${escapeHtml(c.gender)}</span>`;
+            }
+
             tr.innerHTML = `
                 <td class="py-3 px-4">
-                    <div class="font-bold text-slate-800 text-sm">${escapeHtml(c.full_name)}</div>
+                    <div class="flex items-center gap-1.5">
+                        <span class="font-bold text-slate-800 text-sm">${escapeHtml(c.full_name)}</span>
+                        ${genderBadge}
+                    </div>
                     <div class="text-[11px] font-semibold text-slate-400 font-mono">${escapeHtml(c.account_number)}</div>
                 </td>
                 <td class="py-3 px-4 text-slate-600">
                     <div class="flex items-center gap-1.5">
                         <i class="fa-solid fa-phone text-slate-400 text-[11px]"></i>
-                        <span>${escapeHtml(c.phone)}</span>
+                        <span>${escapeHtml(c.phone || '—')}</span>
                     </div>
                     <div class="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5">
                         <i class="fa-solid fa-location-dot text-slate-400 text-[11px]"></i>
-                        <span>${escapeHtml(c.location)}</span>
+                        <span>${escapeHtml(c.location || 'Not specified')}</span>
                     </div>
                 </td>
-                <td class="py-3 px-4 text-slate-700 font-medium">${escapeHtml(c.collector_name)}</td>
+                <td class="py-3 px-4 text-slate-700 font-medium">${escapeHtml(c.collector_name || 'Unassigned')}</td>
                 <td class="py-3 px-4">${cardColHtml}</td>
                 <td class="py-3 px-4">
                     <span class="font-bold ${floatColor}">${c.change_balance_formatted}</span>
@@ -465,6 +475,7 @@ function initCustomerFilter() {
                     window.openEditCustomerModal({
                         id: c.id,
                         full_name: c.full_name,
+                        gender: c.gender || '',
                         account_number: c.account_number,
                         phone: c.phone,
                         location: c.location,
@@ -538,8 +549,11 @@ function initCustomerFilter() {
             card.innerHTML = `
                 <div class="flex items-center justify-between">
                     <div>
-                        <div class="font-extrabold text-sm text-slate-800">${escapeHtml(c.full_name)}</div>
-                        <div class="text-[11px] text-slate-500 font-mono">${escapeHtml(c.account_number)} &bull; ${escapeHtml(c.phone)}</div>
+                        <div class="flex items-center gap-1.5">
+                            <span class="font-extrabold text-sm text-slate-800">${escapeHtml(c.full_name)}</span>
+                            ${genderBadge}
+                        </div>
+                        <div class="text-[11px] text-slate-500 font-mono">${escapeHtml(c.account_number)} &bull; ${escapeHtml(c.phone || 'No phone')}</div>
                     </div>
                     ${cardHeaderBadge}
                 </div>
@@ -560,6 +574,7 @@ function initCustomerFilter() {
                     window.openEditCustomerModal({
                         id: c.id,
                         full_name: c.full_name,
+                        gender: c.gender || '',
                         account_number: c.account_number,
                         phone: c.phone,
                         location: c.location,

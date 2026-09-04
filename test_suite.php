@@ -109,6 +109,49 @@ assert_test("Test 8b: Official customers exist", ($custCount >= 2), true);
 $totalCards = (int)$pdo->query("SELECT COUNT(*) FROM susu_cards")->fetchColumn();
 assert_test("Test 8c: Susu Cards exist in database", ($totalCards >= 2), true);
 
+// -----------------------------------------------------------
+// TEST 9: Deposit Cancellation / Reversal & Admin Notification
+// -----------------------------------------------------------
+$testCustName = "Test Reversal Customer " . time();
+$pdo->prepare("INSERT INTO customers (account_number, full_name, phone, location) VALUES (?, ?, ?, ?)")
+    ->execute(['TEST' . rand(1000, 9999), $testCustName, '0240000000', 'Test Lab']);
+$testCustId = (int)$pdo->lastInsertId();
+
+$pdo->prepare("INSERT INTO susu_cards (customer_id, card_number, daily_amount, total_spaces, spaces_filled, total_saved, status) VALUES (?, 99, 20.00, 31, 2, 40.00, 'active')")
+    ->execute([$testCustId]);
+$testCardId = (int)$pdo->lastInsertId();
+
+// Insert 2 spaces created at same second
+$nowTime = date('Y-m-d H:i:s');
+$pdo->prepare("INSERT INTO deposits (card_id, customer_id, collector_id, space_number, amount, deposit_date, created_at) VALUES (?, ?, 1, 1, 20.00, CURRENT_DATE(), ?)")
+    ->execute([$testCardId, $testCustId, $nowTime]);
+$dep1Id = (int)$pdo->lastInsertId();
+
+$pdo->prepare("INSERT INTO deposits (card_id, customer_id, collector_id, space_number, amount, deposit_date, created_at) VALUES (?, ?, 1, 2, 20.00, CURRENT_DATE(), ?)")
+    ->execute([$testCardId, $testCustId, $nowTime]);
+
+// Reverse the batch using dep1Id
+$revResult = reverse_deposit($dep1Id, 'Customer changed mind', 1, 'admin');
+
+assert_test("Test 9a: Deposit reversal succeeded", $revResult['success'], true);
+assert_test("Test 9b: Reversed exact 2 spaces", $revResult['spaces'], 2);
+assert_test("Test 9c: Reversed exact GH₵40.00", (float)$revResult['amount'], 40.00);
+
+// Check card balance and spaces
+$chkCard = $pdo->query("SELECT spaces_filled, total_saved, status FROM susu_cards WHERE id = {$testCardId}")->fetch();
+assert_test("Test 9d: Card spaces decremented to 0", (int)$chkCard['spaces_filled'], 0);
+assert_test("Test 9e: Card total_saved decremented to 0.00", (float)$chkCard['total_saved'], 0.00);
+assert_test("Test 9f: Card remains active", $chkCard['status'], 'active');
+
+// Check Admin notification
+$notifCount = (int)$pdo->query("SELECT COUNT(*) FROM notifications WHERE message LIKE '%cancelled deposit of GH₵ 40.00%'")->fetchColumn();
+assert_test("Test 9g: Admin notification dispatched", ($notifCount >= 1), true);
+
+// Clean up test data
+$pdo->exec("DELETE FROM notifications WHERE message LIKE '%{$testCustName}%'");
+$pdo->exec("DELETE FROM susu_cards WHERE id = {$testCardId}");
+$pdo->exec("DELETE FROM customers WHERE id = {$testCustId}");
+
 echo "\n--------------------------------------------------------\n";
 echo "SUMMARY: {$testsPassed} Passed, {$testsFailed} Failed\n";
 echo "--------------------------------------------------------\n";

@@ -32,6 +32,8 @@ $stmtCust = $pdo->prepare("
 ");
 $stmtCust->execute([$collectorId]);
 $myCustomers = $stmtCust->fetchAll();
+$totalAssignedCount = count($myCustomers);
+$activeCardsCount = count(array_filter($myCustomers, fn($c) => !empty($c['card_id'])));
 
 require_once __DIR__ . '/includes/header.php';
 ?>
@@ -74,7 +76,7 @@ require_once __DIR__ . '/includes/header.php';
             </div>
             <div>
                 <span class="text-cornflower_ocean-800 font-medium">My Assigned Customers:</span>
-                <div class="font-extrabold text-sm text-white"><?= count($myCustomers) ?> clients</div>
+                <div class="font-extrabold text-sm text-white"><?= $totalAssignedCount ?> clients <span class="text-xs font-normal text-cornflower_ocean-900">(<?= $activeCardsCount ?> active cards)</span></div>
             </div>
         </div>
     </div>

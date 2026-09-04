@@ -127,18 +127,25 @@ require_once __DIR__ . '/includes/header.php';
             </a>
         </div>
 
-        <!-- 4th: Active Susu Cards (Serial Position: Last — reference info) -->
+        <!-- 4th: Active Susu Cards & Total Customers -->
         <div class="kpi-card flex flex-col justify-between">
             <div>
                 <div class="flex items-center justify-between">
                     <div class="kpi-icon bg-blue-50 text-steel_azure">
-                        <i class="fa-solid fa-id-card"></i>
+                        <i class="fa-solid fa-users"></i>
                     </div>
-                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-steel_azure">Passbooks</span>
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-steel_azure">
+                        <?= number_format($stats['total_customers']) ?> Registered
+                    </span>
                 </div>
-                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mt-2">Active Cards</span>
-                <div class="mt-1 text-xl sm:text-2xl font-extrabold text-steel_azure">
-                    <?= $stats['active_cards'] ?>
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mt-2">Active Cards / Total</span>
+                <div class="mt-1 flex items-baseline gap-1.5">
+                    <span class="text-xl sm:text-2xl font-extrabold text-steel_azure">
+                        <?= number_format($stats['active_cards']) ?>
+                    </span>
+                    <span class="text-xs font-bold text-slate-400">
+                        active / <strong class="text-slate-700"><?= number_format($stats['total_customers']) ?></strong> clients
+                    </span>
                 </div>
             </div>
             <a href="customers.php" class="btn-touch mt-3 w-full py-2 px-3 rounded-xl text-xs font-bold bg-blue-50 text-steel_azure hover:bg-steel_azure hover:text-white border border-blue-200 transition shadow-xs flex items-center justify-center gap-1.5">
