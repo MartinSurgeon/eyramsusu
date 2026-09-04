@@ -639,24 +639,97 @@ require_once __DIR__ . '/includes/header.php';
                     </span>
                 </div>
 
-                <div>
-                    <label for="edit_route_action" class="block text-xs font-bold text-slate-700 mb-1">Route Action</label>
-                    <select id="edit_route_action" name="route_action" onchange="toggleEditRouteContainers()"
-                            class="w-full px-3.5 py-2.5 rounded-xl border border-silver-600 focus:border-steel_azure outline-none text-xs sm:text-sm font-semibold transition bg-white">
-                        <option value="none">-- Keep Existing Client Assignments --</option>
-                        <?php if ($unassignedCount > 0): ?>
-                            <option value="assign_unassigned">+ Assign All Unassigned Clients (<?= $unassignedCount ?> clients)</option>
-                            <option value="specific_clients">☑ Pick Specific Unassigned Clients to Assign...</option>
-                        <?php endif; ?>
-                        <option value="transfer_from">⇄ Transfer All Clients From Another Collector...</option>
-                        <option value="unassign_all">✕ Remove / Unassign All Clients from this Collector</option>
-                    </select>
+                <!-- Font Awesome Styled Route Action Cards -->
+                <div class="space-y-2" id="edit_route_options_group">
+                    <!-- Option 1: Keep Current Route -->
+                    <label class="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white hover:border-steel_azure cursor-pointer transition has-[:checked]:border-steel_azure has-[:checked]:bg-blue-50/50 has-[:checked]:ring-1 has-[:checked]:ring-steel_azure">
+                        <div class="flex items-center gap-3">
+                            <input type="radio" name="route_action" value="none" checked onchange="toggleEditRouteContainers()" class="w-4 h-4 text-steel_azure">
+                            <div class="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 flex-shrink-0">
+                                <i class="fa-solid fa-shield-halved text-xs"></i>
+                            </div>
+                            <div>
+                                <div class="text-xs font-extrabold text-slate-800">Keep Current Route</div>
+                                <div class="text-[11px] text-slate-400">No client reassignments will be made</div>
+                            </div>
+                        </div>
+                    </label>
+
+                    <?php if ($unassignedCount > 0): ?>
+                    <!-- Option 2: Assign All Unassigned Clients -->
+                    <label class="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white hover:border-steel_azure cursor-pointer transition has-[:checked]:border-steel_azure has-[:checked]:bg-blue-50/50 has-[:checked]:ring-1 has-[:checked]:ring-steel_azure">
+                        <div class="flex items-center gap-3">
+                            <input type="radio" name="route_action" value="assign_unassigned" onchange="toggleEditRouteContainers()" class="w-4 h-4 text-steel_azure">
+                            <div class="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-700 flex-shrink-0">
+                                <i class="fa-solid fa-user-plus text-xs"></i>
+                            </div>
+                            <div>
+                                <div class="text-xs font-extrabold text-slate-800">Assign All Unassigned Clients</div>
+                                <div class="text-[11px] text-slate-400">Hand over all unassigned customers to this collector</div>
+                            </div>
+                        </div>
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1 flex-shrink-0">
+                            <i class="fa-solid fa-circle-check text-[9px]"></i>
+                            <span>+<?= $unassignedCount ?> Available</span>
+                        </span>
+                    </label>
+
+                    <!-- Option 3: Pick Specific Unassigned Clients -->
+                    <label class="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white hover:border-steel_azure cursor-pointer transition has-[:checked]:border-steel_azure has-[:checked]:bg-blue-50/50 has-[:checked]:ring-1 has-[:checked]:ring-steel_azure">
+                        <div class="flex items-center gap-3">
+                            <input type="radio" name="route_action" value="specific_clients" onchange="toggleEditRouteContainers()" class="w-4 h-4 text-steel_azure">
+                            <div class="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-700 flex-shrink-0">
+                                <i class="fa-solid fa-list-check text-xs"></i>
+                            </div>
+                            <div>
+                                <div class="text-xs font-extrabold text-slate-800">Pick Specific Clients to Assign</div>
+                                <div class="text-[11px] text-slate-400">Select individual customers from the unassigned list</div>
+                            </div>
+                        </div>
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 flex-shrink-0">
+                            Custom Pick
+                        </span>
+                    </label>
+                    <?php endif; ?>
+
+                    <!-- Option 4: Transfer Route From Another Collector -->
+                    <label class="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white hover:border-steel_azure cursor-pointer transition has-[:checked]:border-steel_azure has-[:checked]:bg-blue-50/50 has-[:checked]:ring-1 has-[:checked]:ring-steel_azure">
+                        <div class="flex items-center gap-3">
+                            <input type="radio" name="route_action" value="transfer_from" onchange="toggleEditRouteContainers()" class="w-4 h-4 text-steel_azure">
+                            <div class="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center text-amber-700 flex-shrink-0">
+                                <i class="fa-solid fa-arrow-right-arrow-left text-xs"></i>
+                            </div>
+                            <div>
+                                <div class="text-xs font-extrabold text-slate-800">Transfer All Clients from Another Agent</div>
+                                <div class="text-[11px] text-slate-400">Take over another collector's full route portfolio</div>
+                            </div>
+                        </div>
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1 flex-shrink-0">
+                            <i class="fa-solid fa-users text-[9px]"></i>
+                            <span>Transfer</span>
+                        </span>
+                    </label>
+
+                    <!-- Option 5: Unassign All Clients -->
+                    <label class="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white hover:border-red-300 cursor-pointer transition has-[:checked]:border-red-500 has-[:checked]:bg-red-50/50 has-[:checked]:ring-1 has-[:checked]:ring-red-500">
+                        <div class="flex items-center gap-3">
+                            <input type="radio" name="route_action" value="unassign_all" onchange="toggleEditRouteContainers()" class="w-4 h-4 text-red-600">
+                            <div class="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center text-red-600 flex-shrink-0">
+                                <i class="fa-solid fa-user-xmark text-xs"></i>
+                            </div>
+                            <div>
+                                <div class="text-xs font-extrabold text-red-700">Unassign All Clients from this Agent</div>
+                                <div class="text-[11px] text-slate-400">Clear customer route without deactivating the account</div>
+                            </div>
+                        </div>
+                    </label>
                 </div>
 
                 <!-- Transfer From Collector Dropdown -->
                 <div id="edit_transfer_container" class="hidden p-3.5 bg-blue-50 border border-blue-200 rounded-xl space-y-2">
-                    <label for="edit_transfer_from_col_id" class="block text-xs font-bold text-slate-800">
-                        Transfer Route From:
+                    <label for="edit_transfer_from_col_id" class="block text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                        <i class="fa-solid fa-user-tag text-steel_azure text-xs"></i>
+                        <span>Transfer Route From:</span>
                     </label>
                     <select id="edit_transfer_from_col_id" name="transfer_from_collector_id"
                             class="w-full px-3 py-2 rounded-xl border border-silver-600 focus:border-steel_azure outline-none text-xs font-semibold bg-white">
@@ -674,15 +747,21 @@ require_once __DIR__ . '/includes/header.php';
                 <?php if ($unassignedCount > 0): ?>
                 <div id="edit_specific_container" class="hidden p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
                     <div class="flex items-center justify-between gap-2">
-                        <label class="text-xs font-bold text-slate-800">Select Unassigned Clients:</label>
+                        <label class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                            <i class="fa-solid fa-list-check text-steel_azure text-xs"></i>
+                            <span>Select Unassigned Clients:</span>
+                        </label>
                         <div class="flex items-center gap-1.5 text-[11px]">
                             <button type="button" onclick="selectAllEditClients(true)" class="text-steel_azure font-bold hover:underline">Select All</button>
                             <span class="text-slate-300">|</span>
                             <button type="button" onclick="selectAllEditClients(false)" class="text-slate-500 font-medium hover:underline">Deselect</button>
                         </div>
                     </div>
-                    <input type="text" id="edit_client_filter" oninput="filterEditClients()" placeholder="Filter by client name or account #..."
-                           class="w-full px-3 py-1.5 rounded-lg border border-silver-600 text-xs outline-none bg-white">
+                    <div class="relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                        <input type="text" id="edit_client_filter" oninput="filterEditClients()" placeholder="Filter by client name or account #..."
+                               class="w-full pl-8 pr-3 py-1.5 rounded-lg border border-silver-600 text-xs outline-none bg-white">
+                    </div>
                     <div class="max-h-44 overflow-y-auto divide-y divide-slate-200 border border-slate-200 rounded-lg bg-white p-1" id="edit_clients_list">
                         <?php foreach ($unassignedCustomers as $uc): ?>
                             <label class="edit-client-item flex items-center justify-between p-2 hover:bg-slate-50 rounded cursor-pointer text-xs"
@@ -748,8 +827,9 @@ require_once __DIR__ . '/includes/header.php';
             </div>
 
             <div>
-                <label for="new_collector_id" class="block text-xs font-bold text-slate-700 mb-1">
-                    Transfer <span id="deact_clients_count" class="font-extrabold text-steel_azure">0</span> Clients To:
+                <label for="new_collector_id" class="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5">
+                    <i class="fa-solid fa-users text-steel_azure text-xs"></i>
+                    <span>Transfer <span id="deact_clients_count" class="font-extrabold text-steel_azure">0</span> Clients To:</span>
                 </label>
                 <select id="new_collector_id" name="new_collector_id"
                         class="w-full px-3.5 py-2.5 rounded-xl border border-silver-600 focus:border-steel_azure outline-none text-xs sm:text-sm font-semibold transition bg-white">
@@ -810,8 +890,9 @@ require_once __DIR__ . '/includes/header.php';
                     <div class="text-sm font-extrabold text-slate-800 truncate" id="reactivate_name">-</div>
                     <div class="text-[11px] text-slate-500 font-medium truncate" id="reactivate_meta">-</div>
                 </div>
-                <span class="text-[10px] font-black text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-1 rounded-lg">
-                    Reactivating
+                <span class="text-[10px] font-black text-emerald-700 bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-lg flex items-center gap-1">
+                    <i class="fa-solid fa-rotate-left text-[9px]"></i>
+                    <span>Reactivating</span>
                 </span>
             </div>
 
@@ -822,25 +903,83 @@ require_once __DIR__ . '/includes/header.php';
                     <span>Customer Route Assignment</span>
                 </div>
 
-                <div>
-                    <label for="reactivate_route_action" class="block text-xs font-bold text-slate-700 mb-1">
-                        Select Client Assignment Option
+                <!-- Font Awesome Styled Radio Cards -->
+                <div class="space-y-2" id="reactivate_route_options_group">
+                    <!-- Option 1: Keep Current Route -->
+                    <label class="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white hover:border-emerald-600 cursor-pointer transition has-[:checked]:border-emerald-600 has-[:checked]:bg-emerald-50/40 has-[:checked]:ring-1 has-[:checked]:ring-emerald-600">
+                        <div class="flex items-center gap-3">
+                            <input type="radio" name="reactivate_route_action" value="none" checked onchange="toggleReactivateRouteContainers()" class="w-4 h-4 text-emerald-600">
+                            <div class="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 flex-shrink-0">
+                                <i class="fa-solid fa-shield-halved text-xs"></i>
+                            </div>
+                            <div>
+                                <div class="text-xs font-extrabold text-slate-800">Keep Current Route</div>
+                                <div class="text-[11px] text-slate-400">No client reassignments will be made</div>
+                            </div>
+                        </div>
                     </label>
-                    <select id="reactivate_route_action" name="reactivate_route_action" onchange="toggleReactivateRouteContainers()"
-                            class="w-full px-3.5 py-2.5 rounded-xl border border-silver-600 focus:border-emerald-600 outline-none text-xs sm:text-sm font-semibold transition bg-white">
-                        <option value="none">-- Keep Current Route (No reassignments) --</option>
-                        <?php if ($unassignedCount > 0): ?>
-                            <option value="assign_unassigned">+ Assign All Unassigned Clients (<?= $unassignedCount ?> clients available)</option>
-                            <option value="specific_clients">☑ Pick Specific Unassigned Clients to Assign...</option>
-                        <?php endif; ?>
-                        <option value="transfer_from">⇄ Transfer All Clients From Another Collector...</option>
-                    </select>
+
+                    <?php if ($unassignedCount > 0): ?>
+                    <!-- Option 2: Assign All Unassigned Clients -->
+                    <label class="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white hover:border-emerald-600 cursor-pointer transition has-[:checked]:border-emerald-600 has-[:checked]:bg-emerald-50/40 has-[:checked]:ring-1 has-[:checked]:ring-emerald-600">
+                        <div class="flex items-center gap-3">
+                            <input type="radio" name="reactivate_route_action" value="assign_unassigned" onchange="toggleReactivateRouteContainers()" class="w-4 h-4 text-emerald-600">
+                            <div class="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-700 flex-shrink-0">
+                                <i class="fa-solid fa-user-plus text-xs"></i>
+                            </div>
+                            <div>
+                                <div class="text-xs font-extrabold text-slate-800">Assign All Unassigned Clients</div>
+                                <div class="text-[11px] text-slate-400">Hand all <?= $unassignedCount ?> unassigned clients to this collector</div>
+                            </div>
+                        </div>
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1 flex-shrink-0">
+                            <i class="fa-solid fa-circle-check text-[9px]"></i>
+                            <span>+<?= $unassignedCount ?> Available</span>
+                        </span>
+                    </label>
+
+                    <!-- Option 3: Pick Specific Unassigned Clients -->
+                    <label class="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white hover:border-emerald-600 cursor-pointer transition has-[:checked]:border-emerald-600 has-[:checked]:bg-emerald-50/40 has-[:checked]:ring-1 has-[:checked]:ring-emerald-600">
+                        <div class="flex items-center gap-3">
+                            <input type="radio" name="reactivate_route_action" value="specific_clients" onchange="toggleReactivateRouteContainers()" class="w-4 h-4 text-emerald-600">
+                            <div class="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-700 flex-shrink-0">
+                                <i class="fa-solid fa-list-check text-xs"></i>
+                            </div>
+                            <div>
+                                <div class="text-xs font-extrabold text-slate-800">Pick Specific Clients to Assign</div>
+                                <div class="text-[11px] text-slate-400">Select individual clients from unassigned list</div>
+                            </div>
+                        </div>
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 flex-shrink-0">
+                            Custom Pick
+                        </span>
+                    </label>
+                    <?php endif; ?>
+
+                    <!-- Option 4: Transfer Route From Another Collector -->
+                    <label class="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white hover:border-emerald-600 cursor-pointer transition has-[:checked]:border-emerald-600 has-[:checked]:bg-emerald-50/40 has-[:checked]:ring-1 has-[:checked]:ring-emerald-600">
+                        <div class="flex items-center gap-3">
+                            <input type="radio" name="reactivate_route_action" value="transfer_from" onchange="toggleReactivateRouteContainers()" class="w-4 h-4 text-emerald-600">
+                            <div class="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center text-amber-700 flex-shrink-0">
+                                <i class="fa-solid fa-arrow-right-arrow-left text-xs"></i>
+                            </div>
+                            <div>
+                                <div class="text-xs font-extrabold text-slate-800">Transfer All Clients from Another Agent</div>
+                                <div class="text-[11px] text-slate-400">Take over another collector's client portfolio</div>
+                            </div>
+                        </div>
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1 flex-shrink-0">
+                            <i class="fa-solid fa-users text-[9px]"></i>
+                            <span>Transfer</span>
+                        </span>
+                    </label>
                 </div>
 
                 <!-- Transfer From Dropdown -->
                 <div id="reactivate_transfer_container" class="hidden p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl space-y-2">
-                    <label for="reactivate_transfer_from_id" class="block text-xs font-bold text-emerald-950">
-                        Transfer Route From:
+                    <label for="reactivate_transfer_from_id" class="block text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                        <i class="fa-solid fa-user-tag text-emerald-700 text-xs"></i>
+                        <span>Transfer Route From:</span>
                     </label>
                     <select id="reactivate_transfer_from_id" name="reactivate_transfer_from_id"
                             class="w-full px-3 py-2 rounded-xl border border-silver-600 focus:border-emerald-600 outline-none text-xs font-semibold bg-white">
@@ -858,15 +997,21 @@ require_once __DIR__ . '/includes/header.php';
                 <?php if ($unassignedCount > 0): ?>
                 <div id="reactivate_specific_container" class="hidden p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
                     <div class="flex items-center justify-between gap-2">
-                        <label class="text-xs font-bold text-slate-800">Select Unassigned Clients:</label>
+                        <label class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                            <i class="fa-solid fa-list-check text-emerald-700 text-xs"></i>
+                            <span>Select Unassigned Clients:</span>
+                        </label>
                         <div class="flex items-center gap-1.5 text-[11px]">
                             <button type="button" onclick="selectAllReactivateClients(true)" class="text-emerald-700 font-bold hover:underline">Select All</button>
                             <span class="text-slate-300">|</span>
                             <button type="button" onclick="selectAllReactivateClients(false)" class="text-slate-500 font-medium hover:underline">Deselect</button>
                         </div>
                     </div>
-                    <input type="text" id="reactivate_client_filter" oninput="filterReactivateClients()" placeholder="Filter by client name or account #..."
-                           class="w-full px-3 py-1.5 rounded-lg border border-silver-600 text-xs outline-none bg-white">
+                    <div class="relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                        <input type="text" id="reactivate_client_filter" oninput="filterReactivateClients()" placeholder="Filter by client name or account #..."
+                               class="w-full pl-8 pr-3 py-1.5 rounded-lg border border-silver-600 text-xs outline-none bg-white">
+                    </div>
                     <div class="max-h-44 overflow-y-auto divide-y divide-slate-200 border border-slate-200 rounded-lg bg-white p-1" id="reactivate_clients_list">
                         <?php foreach ($unassignedCustomers as $uc): ?>
                             <label class="reactivate-client-item flex items-center justify-between p-2 hover:bg-slate-50 rounded cursor-pointer text-xs"
@@ -949,10 +1094,10 @@ function openEditModal(collector) {
     document.getElementById('edit_is_active').checked = parseInt(collector.is_active) === 1;
     document.getElementById('edit_assigned_count').textContent = collector.assigned_clients || '0';
 
-    // Reset route action dropdown
-    const routeSelect = document.getElementById('edit_route_action');
-    if (routeSelect) {
-        routeSelect.value = 'none';
+    // Reset radio selection to 'none'
+    const defaultRadio = document.querySelector('input[name="route_action"][value="none"]');
+    if (defaultRadio) {
+        defaultRadio.checked = true;
         toggleEditRouteContainers();
     }
 
@@ -968,7 +1113,7 @@ function closeEditModal() {
 }
 
 function toggleEditRouteContainers() {
-    const action = document.getElementById('edit_route_action')?.value || 'none';
+    const action = document.querySelector('input[name="route_action"]:checked')?.value || 'none';
     const transContainer = document.getElementById('edit_transfer_container');
     const specContainer = document.getElementById('edit_specific_container');
 
@@ -1016,10 +1161,10 @@ function openReactivateModal(collector) {
     const initials = collector.full_name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
     document.getElementById('reactivate_avatar').textContent = initials || 'CO';
 
-    // Reset route action dropdown
-    const routeSelect = document.getElementById('reactivate_route_action');
-    if (routeSelect) {
-        routeSelect.value = 'none';
+    // Reset radio selection to 'none'
+    const defaultRadio = document.querySelector('input[name="reactivate_route_action"][value="none"]');
+    if (defaultRadio) {
+        defaultRadio.checked = true;
         toggleReactivateRouteContainers();
     }
 
@@ -1035,7 +1180,7 @@ function closeReactivateModal() {
 }
 
 function toggleReactivateRouteContainers() {
-    const action = document.getElementById('reactivate_route_action')?.value || 'none';
+    const action = document.querySelector('input[name="reactivate_route_action"]:checked')?.value || 'none';
     const transContainer = document.getElementById('reactivate_transfer_container');
     const specContainer = document.getElementById('reactivate_specific_container');
 
