@@ -481,7 +481,7 @@ require_once __DIR__ . '/includes/header.php';
 </div>
 
 <!-- Cancel Deposit Confirmation Modal (HCI: Hick's Law, Fitts's Law, Plain Language) -->
-<div id="cancel_deposit_modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs hidden transition-opacity">
+<div id="cancel_deposit_modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm hidden transition-opacity">
     <div class="bg-white rounded-2xl border border-silver-600 shadow-2xl max-w-md w-full overflow-hidden transform transition-all scale-95 duration-200" id="cancel_modal_box">
         
         <!-- Modal Header -->
