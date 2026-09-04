@@ -1,9 +1,9 @@
 -- database/reset_all_cards.sql
--- ════════════════════════════════════════════════════════════════════
--- FULL CARD DATA RESET — Run once to start all customers afresh
+-- ====================================================================
+-- FULL CARD DATA RESET - Run once to start all customers afresh
 -- Deletes ALL transaction data but keeps customer profiles intact.
--- ⚠  This is IRREVERSIBLE. Run on both LOCAL and LIVE databases.
--- ════════════════════════════════════════════════════════════════════
+-- WARNING: This is IRREVERSIBLE. Run on both LOCAL and LIVE databases.
+-- ====================================================================
 
 SET FOREIGN_KEY_CHECKS = 0;
 
@@ -27,15 +27,15 @@ UPDATE customers SET change_balance = 0.00;
 
 SET FOREIGN_KEY_CHECKS = 1;
 
--- ─── Verification ──────────────────────────────────────────────────
-SELECT 'customers'      AS tbl, COUNT(*) AS rows FROM customers
+-- Verification
+SELECT 'customers' AS table_name, COUNT(*) AS total_count FROM customers
 UNION ALL
-SELECT 'susu_cards',     COUNT(*) FROM susu_cards
+SELECT 'susu_cards', COUNT(*) FROM susu_cards
 UNION ALL
-SELECT 'deposits',       COUNT(*) FROM deposits
+SELECT 'deposits', COUNT(*) FROM deposits
 UNION ALL
-SELECT 'payouts',        COUNT(*) FROM payouts
+SELECT 'payouts', COUNT(*) FROM payouts
 UNION ALL
-SELECT 'daily_handovers',COUNT(*) FROM daily_handovers
+SELECT 'daily_handovers', COUNT(*) FROM daily_handovers
 UNION ALL
-SELECT 'notifications',  COUNT(*) FROM notifications;
+SELECT 'notifications', COUNT(*) FROM notifications;
