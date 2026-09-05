@@ -130,6 +130,46 @@ function get_collector_cash_in_hand($collector_id) {
 }
 
 /**
+ * Fetches collector distribution & metrics for admin overview & mobile drawer
+ * Returns array with collectors (with client counts, active cards, cash in hand), unassigned count, and totals
+ */
+function get_collectors_distribution_summary(): array {
+    $pdo = get_db_connection();
+    $distStmt = $pdo->query("
+        SELECT u.id, u.full_name, u.phone, u.username,
+               COUNT(c.id) as customer_count,
+               COUNT(CASE WHEN sc.id IS NOT NULL THEN 1 END) as active_cards
+        FROM users u
+        LEFT JOIN customers c ON c.assigned_collector_id = u.id AND c.is_active = 1
+        LEFT JOIN susu_cards sc ON sc.customer_id = c.id AND sc.status = 'active'
+        WHERE u.role = 'collector' AND u.is_active = 1
+        GROUP BY u.id, u.full_name, u.phone, u.username
+        ORDER BY customer_count DESC, u.full_name ASC
+    ");
+    $collectors = $distStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Calculate cash in hand for each collector
+    foreach ($collectors as &$col) {
+        $col['cash_in_hand'] = get_collector_cash_in_hand($col['id']);
+    }
+    unset($col);
+
+    // Unassigned customer count
+    $unassignedStmt = $pdo->query("SELECT COUNT(id) FROM customers WHERE assigned_collector_id IS NULL AND is_active = 1");
+    $unassignedCount = (int)$unassignedStmt->fetchColumn();
+
+    // Total active customers
+    $totalCustomersStmt = $pdo->query("SELECT COUNT(id) FROM customers WHERE is_active = 1");
+    $totalCustomers = (int)$totalCustomersStmt->fetchColumn();
+
+    return [
+        'collectors' => $collectors,
+        'unassigned_count' => $unassignedCount,
+        'total_customers' => $totalCustomers
+    ];
+}
+
+/**
  * Reverse/Undo a deposit transaction made today before handover
  *
  * @param int $depositId ID of the deposit (or any space in the transaction batch)

@@ -327,6 +327,16 @@ function initCustomerFilter() {
                     emptyNotice.classList.add('hidden');
                 }
             }
+
+            // Scroll to first visible result on mobile
+            if (visibleCount > 0 && window.innerWidth < 768) {
+                const firstVisible = Array.from(localRows).find(r => r.style.display !== 'none');
+                if (firstVisible) {
+                    setTimeout(() => {
+                        firstVisible.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }, 100);
+                }
+            }
         }
     }
 
@@ -521,6 +531,13 @@ function initCustomerFilter() {
                 `;
             }
 
+            let genderBadge = '';
+            if (c.gender) {
+                const isF = c.gender === 'F';
+                const badgeClass = isF ? 'bg-pink-50 text-pink-700 border border-pink-200' : 'bg-blue-50 text-blue-700 border border-blue-200';
+                genderBadge = `<span class="px-1.5 py-0.5 text-[9px] font-black rounded-md uppercase tracking-wider ${badgeClass}" title="Gender: ${isF ? 'Female' : 'Male'}">${escapeHtml(c.gender)}</span>`;
+            }
+
             let mobileActions = '';
             if (c.card_id) {
                 mobileActions += `
@@ -593,6 +610,13 @@ function initCustomerFilter() {
 
             mobileContainer.appendChild(card);
         });
+
+        // Auto-scroll to first result on mobile so cards are visible above the keyboard
+        if (window.innerWidth < 768 && mobileContainer.firstElementChild) {
+            setTimeout(() => {
+                mobileContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
+        }
     }
 }
 

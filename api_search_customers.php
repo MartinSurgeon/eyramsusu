@@ -92,6 +92,7 @@ try {
             'id' => (int)$c['id'],
             'account_number' => $c['account_number'],
             'full_name' => $c['full_name'],
+            'gender' => $c['gender'] ?? null,
             'phone' => $c['phone'],
             'location' => $c['location'] ?: 'Not specified',
             'change_balance' => (float)$c['change_balance'],

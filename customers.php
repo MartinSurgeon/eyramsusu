@@ -110,6 +110,44 @@ $customerMetrics = $metricsStmt->fetch(PDO::FETCH_ASSOC) ?: ['total_customers' =
 $totalCustomersCount = (int)$customerMetrics['total_customers'];
 $activeCardsCount = (int)$customerMetrics['active_card_customers'];
 $noCardsCount = max(0, $totalCustomersCount - $activeCardsCount);
+$activePercentage = $totalCustomersCount > 0 ? round(($activeCardsCount / $totalCustomersCount) * 100) : 0;
+
+// Additional bento metrics: total saved across active cards & today's deposit count
+if ($user['role'] === 'collector') {
+    $bentoStmt = $pdo->prepare("
+        SELECT COALESCE(SUM(sc.total_saved), 0) as total_saved_all
+        FROM susu_cards sc
+        JOIN customers c ON sc.customer_id = c.id
+        WHERE sc.status = 'active' AND c.assigned_collector_id = ? AND c.is_active = 1
+    ");
+    $bentoStmt->execute([$user['id']]);
+} else {
+    $bentoStmt = $pdo->query("
+        SELECT COALESCE(SUM(sc.total_saved), 0) as total_saved_all
+        FROM susu_cards sc
+        JOIN customers c ON sc.customer_id = c.id
+        WHERE sc.status = 'active' AND c.is_active = 1
+    ");
+}
+$bentoData = $bentoStmt->fetch(PDO::FETCH_ASSOC);
+$totalSavedAll = (float)($bentoData['total_saved_all'] ?? 0);
+
+// Collector distribution for contributors drawer (admin only)
+$collectorDistribution = [];
+if ($user['role'] === 'admin') {
+    $distStmt = $pdo->query("
+        SELECT u.id, u.full_name, u.phone,
+               COUNT(c.id) as customer_count,
+               COUNT(CASE WHEN sc.id IS NOT NULL THEN 1 END) as active_cards
+        FROM users u
+        LEFT JOIN customers c ON c.assigned_collector_id = u.id AND c.is_active = 1
+        LEFT JOIN susu_cards sc ON sc.customer_id = c.id AND sc.status = 'active'
+        WHERE u.role = 'collector' AND u.is_active = 1
+        GROUP BY u.id, u.full_name, u.phone
+        ORDER BY customer_count DESC
+    ");
+    $collectorDistribution = $distStmt->fetchAll(PDO::FETCH_ASSOC);
+}
 
 // Status filter parameter support ('all', 'active', 'no_card')
 $statusFilter = trim($_GET['status_filter'] ?? $_GET['filter'] ?? 'all');
@@ -206,64 +244,118 @@ require_once __DIR__ . '/includes/header.php';
         </div>
     </div>
 
-    <!-- Customer Metrics KPI Cards (Total Customers & Total with Active Card) -->
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-        <!-- 1: Total Registered Customers -->
+    <!-- Bento Grid: Customer Metrics KPI (Asymmetric Bento Layout) -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+
+        <!-- BENTO HERO: Total Registered Customers (Spans 2 cols) -->
         <a href="customers.php" 
-           class="p-4 rounded-2xl bg-white border <?= $statusFilter === 'all' && empty($searchQuery) ? 'border-steel_azure ring-2 ring-steel_azure/20 shadow-sm' : 'border-silver-600 shadow-2xs hover:border-steel_azure/50' ?> transition flex items-center justify-between group cursor-pointer">
-            <div class="flex items-center gap-3.5">
-                <div class="w-11 h-11 rounded-xl bg-blue-50 text-steel_azure flex items-center justify-center text-lg font-bold group-hover:scale-105 transition flex-shrink-0">
-                    <i class="fa-solid fa-users"></i>
-                </div>
+           class="col-span-2 relative overflow-hidden p-5 sm:p-6 rounded-2xl <?= $statusFilter === 'all' && empty($searchQuery) ? 'bg-gradient-to-br from-steel_azure to-cornflower_ocean ring-2 ring-steel_azure/30 shadow-lg' : 'bg-gradient-to-br from-slate-800 to-slate-700 shadow-md hover:shadow-lg' ?> text-white group cursor-pointer transition-all duration-300">
+            <!-- Decorative background pattern -->
+            <div class="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2"></div>
+            <div class="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2"></div>
+            
+            <div class="relative z-10 flex items-center justify-between">
                 <div>
-                    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Total Customers</span>
-                    <div class="text-xl sm:text-2xl font-black text-steel_azure leading-tight">
+                    <div class="flex items-center gap-2 mb-2">
+                        <div class="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                            <i class="fa-solid fa-users text-lg"></i>
+                        </div>
+                        <span class="text-[10px] font-bold uppercase tracking-widest text-white/60">Total Customers</span>
+                    </div>
+                    <div class="text-3xl sm:text-4xl font-black leading-none tracking-tight">
                         <?= number_format($totalCustomersCount) ?>
                     </div>
+                    <div class="text-xs text-white/50 mt-1.5 font-medium">
+                        <?= $activePercentage ?>% have active cards
+                    </div>
+                </div>
+                
+                <!-- Mini progress ring -->
+                <div class="flex-shrink-0 relative w-16 h-16 sm:w-20 sm:h-20">
+                    <svg viewBox="0 0 36 36" class="w-full h-full -rotate-90">
+                        <circle cx="18" cy="18" r="15.5" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="3"/>
+                        <circle cx="18" cy="18" r="15.5" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="3" 
+                                stroke-dasharray="<?= round($activePercentage * 97.4 / 100, 1) ?>, 97.4"
+                                stroke-linecap="round" class="transition-all duration-700"/>
+                    </svg>
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <span class="text-xs sm:text-sm font-black text-white/90"><?= $activePercentage ?>%</span>
+                    </div>
                 </div>
             </div>
-            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full <?= $statusFilter === 'all' ? 'bg-steel_azure text-white' : 'bg-slate-100 text-slate-500' ?>">
-                All (<?= $totalCustomersCount ?>)
-            </span>
+            
+            <div class="relative z-10 mt-3 pt-3 border-t border-white/10 flex items-center justify-between text-[10px]">
+                <span class="font-semibold px-2.5 py-1 rounded-full <?= $statusFilter === 'all' ? 'bg-white/20 text-white' : 'bg-white/10 text-white/60' ?>">
+                    All (<?= $totalCustomersCount ?>)
+                </span>
+                <span class="text-white/40 flex items-center gap-1">
+                    <i class="fa-solid fa-arrow-right text-[8px] group-hover:translate-x-1 transition-transform"></i>
+                    View all
+                </span>
+            </div>
         </a>
 
-        <!-- 2: Total Customers with Active Card -->
+        <!-- BENTO CELL: Active Card Customers -->
         <a href="customers.php?filter=active" 
-           class="p-4 rounded-2xl bg-white border <?= $statusFilter === 'active' ? 'border-emerald-600 ring-2 ring-emerald-600/20 shadow-sm' : 'border-silver-600 shadow-2xs hover:border-emerald-500/50' ?> transition flex items-center justify-between group cursor-pointer">
-            <div class="flex items-center gap-3.5">
-                <div class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg font-bold group-hover:scale-105 transition flex-shrink-0">
+           class="p-4 rounded-2xl <?= $statusFilter === 'active' ? 'bg-emerald-50 border-2 border-emerald-500 ring-2 ring-emerald-500/20 shadow-sm' : 'bg-white border border-silver-600 shadow-2xs hover:border-emerald-400 hover:shadow-sm' ?> group cursor-pointer transition-all duration-200 flex flex-col justify-between">
+            <div>
+                <div class="w-9 h-9 rounded-xl <?= $statusFilter === 'active' ? 'bg-emerald-500 text-white' : 'bg-emerald-50 text-emerald-600' ?> flex items-center justify-center text-sm group-hover:scale-110 transition-transform duration-300 mb-3">
                     <i class="fa-solid fa-id-card"></i>
                 </div>
-                <div>
-                    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">With Active Card</span>
-                    <div class="text-xl sm:text-2xl font-black text-emerald-600 leading-tight">
-                        <?= number_format($activeCardsCount) ?>
-                    </div>
+                <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Active Card</div>
+                <div class="text-2xl font-black <?= $statusFilter === 'active' ? 'text-emerald-700' : 'text-emerald-600' ?> leading-tight mt-0.5">
+                    <?= number_format($activeCardsCount) ?>
                 </div>
             </div>
-            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full <?= $statusFilter === 'active' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700 border border-emerald-200' ?>">
-                Active (<?= $activeCardsCount ?>)
-            </span>
+            <div class="mt-3 pt-2 border-t <?= $statusFilter === 'active' ? 'border-emerald-200' : 'border-silver-600/50' ?>">
+                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full <?= $statusFilter === 'active' ? 'bg-emerald-500 text-white' : 'bg-emerald-50 text-emerald-700 border border-emerald-200' ?>">
+                    Active (<?= $activeCardsCount ?>)
+                </span>
+            </div>
         </a>
 
-        <!-- 3: Total Customers without Card -->
+        <!-- BENTO CELL: Without Active Card -->
         <a href="customers.php?filter=no_card" 
-           class="p-4 rounded-2xl bg-white border <?= $statusFilter === 'no_card' ? 'border-pumpkin_spice ring-2 ring-pumpkin_spice/20 shadow-sm' : 'border-silver-600 shadow-2xs hover:border-pumpkin_spice/50' ?> transition flex items-center justify-between group cursor-pointer">
-            <div class="flex items-center gap-3.5">
-                <div class="w-11 h-11 rounded-xl bg-orange-50 text-pumpkin_spice flex items-center justify-center text-lg font-bold group-hover:scale-105 transition flex-shrink-0">
+           class="p-4 rounded-2xl <?= $statusFilter === 'no_card' ? 'bg-orange-50 border-2 border-pumpkin_spice ring-2 ring-pumpkin_spice/20 shadow-sm' : 'bg-white border border-silver-600 shadow-2xs hover:border-pumpkin_spice/50 hover:shadow-sm' ?> group cursor-pointer transition-all duration-200 flex flex-col justify-between">
+            <div>
+                <div class="w-9 h-9 rounded-xl <?= $statusFilter === 'no_card' ? 'bg-pumpkin_spice text-white' : 'bg-orange-50 text-pumpkin_spice' ?> flex items-center justify-center text-sm group-hover:scale-110 transition-transform duration-300 mb-3">
                     <i class="fa-solid fa-user-clock"></i>
                 </div>
+                <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">No Card</div>
+                <div class="text-2xl font-black <?= $statusFilter === 'no_card' ? 'text-orange-700' : 'text-pumpkin_spice' ?> leading-tight mt-0.5">
+                    <?= number_format($noCardsCount) ?>
+                </div>
+            </div>
+            <div class="mt-3 pt-2 border-t <?= $statusFilter === 'no_card' ? 'border-orange-200' : 'border-silver-600/50' ?>">
+                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full <?= $statusFilter === 'no_card' ? 'bg-pumpkin_spice text-white' : 'bg-orange-50 text-pumpkin_spice border border-orange-200' ?>">
+                    Pending (<?= $noCardsCount ?>)
+                </span>
+            </div>
+        </a>
+
+        <!-- BENTO WIDE: Portfolio Total Saved + Contributors trigger -->
+        <div class="col-span-2 md:col-span-4 p-4 rounded-2xl bg-white border border-silver-600 shadow-2xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div class="flex items-center gap-3.5">
+                <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 text-emerald-600 flex items-center justify-center text-lg flex-shrink-0">
+                    <i class="fa-solid fa-piggy-bank"></i>
+                </div>
                 <div>
-                    <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Without Active Card</span>
-                    <div class="text-xl sm:text-2xl font-black text-pumpkin_spice leading-tight">
-                        <?= number_format($noCardsCount) ?>
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Saved (Active Cards)</span>
+                    <div class="text-lg sm:text-xl font-black text-emerald-700 leading-tight">
+                        <?= format_money($totalSavedAll) ?>
                     </div>
                 </div>
             </div>
-            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full <?= $statusFilter === 'no_card' ? 'bg-pumpkin_spice text-white' : 'bg-orange-50 text-pumpkin_spice border border-orange-200' ?>">
-                Pending (<?= $noCardsCount ?>)
-            </span>
-        </a>
+            <?php if ($user['role'] === 'admin' && !empty($collectorDistribution)): ?>
+                <button type="button" onclick="toggleContributorsDrawer()" 
+                        class="btn-touch px-4 py-2.5 bg-slate-50 hover:bg-steel_azure hover:text-white text-steel_azure border border-slate-200 hover:border-steel_azure text-xs font-bold rounded-xl transition-all duration-200 flex items-center gap-2 cursor-pointer group">
+                    <i class="fa-solid fa-users-gear text-sm group-hover:scale-110 transition-transform"></i>
+                    <span>Contributors (<?= count($collectorDistribution) ?>)</span>
+                    <i class="fa-solid fa-chevron-right text-[10px] group-hover:translate-x-0.5 transition-transform"></i>
+                </button>
+            <?php endif; ?>
+        </div>
+
     </div>
 
     <!-- Search & Filter Card -->
@@ -1127,3 +1219,4 @@ document.addEventListener('DOMContentLoaded', function() {
 <?php endif; ?>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
+

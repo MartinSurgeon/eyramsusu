@@ -311,9 +311,16 @@ function ariaCurrent($page, $currentPage)
                         <div class="flex items-center space-x-3">
                             <?php if ($currentUser): ?>
                                 <!-- Desktop Sidebar Toggle Button -->
-                                <button type="button" onclick="toggleSidebar()" class="hidden md:flex items-center justify-center w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 text-white transition" title="Toggle Sidebar">
+                                <button type="button" onclick="toggleSidebar()" class="hidden md:flex items-center justify-center w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 text-white transition cursor-pointer" title="Toggle Sidebar">
                                     <i class="fa-solid fa-bars text-base"></i>
                                 </button>
+
+                                <?php if ($currentUser['role'] === 'admin'): ?>
+                                    <!-- Mobile Admin Hamburger (Opens Collectors & Routes Drawer) -->
+                                    <button type="button" onclick="toggleCollectorsDrawer()" class="flex md:hidden items-center justify-center w-10 h-10 rounded-xl bg-white/15 hover:bg-white/25 active:scale-95 text-white transition cursor-pointer shadow-xs" title="Collectors & Routes Menu" aria-label="Open Collectors Menu">
+                                        <i class="fa-solid fa-bars text-base"></i>
+                                    </button>
+                                <?php endif; ?>
                             <?php endif; ?>
 
                             <!-- Mobile Brand Logo -->
