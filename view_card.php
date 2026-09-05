@@ -119,13 +119,13 @@ require_once __DIR__ . '/includes/header.php';
                     <i class="fa-solid fa-id-card text-xs"></i>
                     <span>View Active Card #<?= $otherActiveCard['card_number'] ?></span>
                 </a>
-            <?php elseif ($user['role'] === 'admin'): ?>
+            <?php elseif ($user['role'] === 'admin' || ($user['role'] === 'collector' && (int)$card['card_number'] >= 1)): ?>
                 <form method="POST" action="start_new_card.php" class="inline">
                     <input type="hidden" name="customer_id" value="<?= $card['customer_id'] ?>">
                     <input type="hidden" name="daily_amount" value="<?= $card['daily_amount'] ?>">
                     <button type="submit" class="btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold px-4 py-1.5 shadow-2xs rounded-xl inline-flex items-center gap-1.5 cursor-pointer">
                         <i class="fa-solid fa-circle-plus text-xs"></i>
-                        <span>+ Open New Susu Card</span>
+                        <span>+ Open Next Card (#<?= $card['card_number'] + 1 ?>)</span>
                     </button>
                 </form>
             <?php endif; ?>
@@ -219,13 +219,13 @@ require_once __DIR__ . '/includes/header.php';
                     </a>
                 <?php endif; ?>
 
-                <?php if ($user['role'] === 'admin' && !$otherActiveCard): ?>
+                <?php if (($user['role'] === 'admin' || ($user['role'] === 'collector' && (int)$card['card_number'] >= 1)) && !$otherActiveCard): ?>
                     <form method="POST" action="start_new_card.php" class="inline">
                         <input type="hidden" name="customer_id" value="<?= $card['customer_id'] ?>">
                         <input type="hidden" name="daily_amount" value="<?= $card['daily_amount'] ?>">
                         <button type="submit" class="btn-touch bg-white hover:bg-slate-50 text-steel_azure border border-steel_azure text-xs font-bold px-4 py-2.5 rounded-xl transition inline-flex items-center gap-1.5 cursor-pointer">
                             <i class="fa-solid fa-circle-plus text-xs"></i>
-                            <span>Open Next Card</span>
+                            <span>Open Next Card (#<?= $card['card_number'] + 1 ?>)</span>
                         </button>
                     </form>
                 <?php endif; ?>
@@ -269,7 +269,7 @@ require_once __DIR__ . '/includes/header.php';
                     </div>
                 </div>
             </div>
-            <?php if ($user['role'] === 'admin' && !$otherActiveCard): ?>
+            <?php if (($user['role'] === 'admin' || ($user['role'] === 'collector' && (int)$card['card_number'] >= 1)) && !$otherActiveCard): ?>
                 <form method="POST" action="start_new_card.php" class="flex-shrink-0">
                     <input type="hidden" name="customer_id" value="<?= $card['customer_id'] ?>">
                     <input type="hidden" name="daily_amount" value="<?= $card['daily_amount'] ?>">
@@ -356,7 +356,7 @@ require_once __DIR__ . '/includes/header.php';
             </div>
         </div>
 
-        <?php if ($card['status'] !== 'active' && !$otherActiveCard && $user['role'] === 'admin'): ?>
+        <?php if ($card['status'] !== 'active' && !$otherActiveCard && ($user['role'] === 'admin' || ($user['role'] === 'collector' && (int)$card['card_number'] >= 1))): ?>
             <div class="mt-5 pt-4 border-t border-silver-600/60 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-amber-50/70 p-4 rounded-xl border border-amber-200">
                 <div class="flex items-center gap-2.5">
                     <div class="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-sm font-bold flex-shrink-0">
@@ -377,7 +377,7 @@ require_once __DIR__ . '/includes/header.php';
                     <input type="hidden" name="daily_amount" value="<?= $card['daily_amount'] ?>">
                     <button type="submit" class="btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold px-4 py-2.5 rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer">
                         <i class="fa-solid fa-circle-plus text-xs"></i>
-                        <span>+ Open New Susu Card</span>
+                        <span>+ Open Card #<?= $card['card_number'] + 1 ?></span>
                     </button>
                 </form>
             </div>
@@ -522,13 +522,13 @@ require_once __DIR__ . '/includes/header.php';
                     </div>
                 </div>
 
-                <?php if ($user['role'] === 'admin'): ?>
+                <?php if (($user['role'] === 'admin' || ($user['role'] === 'collector' && (int)$card['card_number'] >= 1)) && !$otherActiveCard): ?>
                     <div class="mt-4 pt-3 border-t border-silver-600/60 flex justify-end">
                         <form method="POST" action="start_new_card.php">
                             <input type="hidden" name="customer_id" value="<?= $card['customer_id'] ?>">
                             <input type="hidden" name="daily_amount" value="<?= $card['daily_amount'] ?>">
-                            <button type="submit" class="btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-bold px-4 py-2 shadow-sm">
-                                + Open New Susu Card for <?= htmlspecialchars($card['full_name']) ?>
+                            <button type="submit" class="btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-bold px-4 py-2 shadow-sm cursor-pointer">
+                                + Open Card #<?= $card['card_number'] + 1 ?> for <?= htmlspecialchars($card['full_name']) ?>
                             </button>
                         </form>
                     </div>

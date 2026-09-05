@@ -263,17 +263,27 @@ $stmtUnassigned = $pdo->query("
 $unassignedCustomers = $stmtUnassigned->fetchAll();
 $unassignedCount = count($unassignedCustomers);
 
-// Fetch all collectors with statistics
+// Fetch all collectors with statistics (isolated subqueries prevent Cartesian product multiplication)
 $stmtAll = $pdo->query("
     SELECT u.*,
-           COUNT(DISTINCT c.id) as assigned_clients,
-           COALESCE(SUM(CASE WHEN d.handover_id IS NULL THEN d.amount ELSE 0 END), 0.00) as cash_in_hand,
-           COALESCE(SUM(CASE WHEN d.deposit_date = CURRENT_DATE THEN d.amount ELSE 0 END), 0.00) as today_collected
+           COALESCE(c.assigned_clients, 0) as assigned_clients,
+           COALESCE(d.cash_in_hand, 0.00) as cash_in_hand,
+           COALESCE(d.today_collected, 0.00) as today_collected
     FROM users u
-    LEFT JOIN customers c ON u.id = c.assigned_collector_id AND c.is_active = 1
-    LEFT JOIN deposits d ON u.id = d.collector_id
+    LEFT JOIN (
+        SELECT assigned_collector_id, COUNT(*) as assigned_clients
+        FROM customers
+        WHERE is_active = 1
+        GROUP BY assigned_collector_id
+    ) c ON u.id = c.assigned_collector_id
+    LEFT JOIN (
+        SELECT collector_id,
+               SUM(CASE WHEN handover_id IS NULL THEN amount ELSE 0 END) as cash_in_hand,
+               SUM(CASE WHEN deposit_date = CURRENT_DATE THEN amount ELSE 0 END) as today_collected
+        FROM deposits
+        GROUP BY collector_id
+    ) d ON u.id = d.collector_id
     WHERE u.role = 'collector'
-    GROUP BY u.id
     ORDER BY u.is_active DESC, u.full_name ASC
 ");
 $collectors = $stmtAll->fetchAll();

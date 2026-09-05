@@ -402,9 +402,12 @@ require_once __DIR__ . '/includes/header.php';
                     <i class="fa-solid fa-piggy-bank"></i>
                 </div>
                 <div>
-                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Saved (Active Cards)</span>
-                    <div class="text-lg sm:text-xl font-black text-emerald-700 leading-tight">
-                        <?= format_money($totalSavedAll) ?>
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Ongoing Customer Savings</span>
+                    <div class="flex flex-wrap items-baseline gap-2 mt-0.5">
+                        <div class="text-lg sm:text-xl font-black text-emerald-700 leading-tight">
+                            <?= format_money($totalSavedAll) ?>
+                        </div>
+                        <span class="text-[11px] text-slate-500 font-medium">saved so far across <?= $activeCardsCount ?> active cards</span>
                     </div>
                 </div>
             </div>

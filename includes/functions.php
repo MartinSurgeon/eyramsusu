@@ -229,8 +229,8 @@ function get_collectors_distribution_summary(): array {
     $pdo = get_db_connection();
     $distStmt = $pdo->query("
         SELECT u.id, u.full_name, u.phone, u.username,
-               COUNT(c.id) as customer_count,
-               COUNT(CASE WHEN sc.id IS NOT NULL THEN 1 END) as active_cards
+               COUNT(DISTINCT c.id) as customer_count,
+               COUNT(DISTINCT sc.id) as active_cards
         FROM users u
         LEFT JOIN customers c ON c.assigned_collector_id = u.id AND c.is_active = 1
         LEFT JOIN susu_cards sc ON sc.customer_id = c.id AND sc.status = 'active'
