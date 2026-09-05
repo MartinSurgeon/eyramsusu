@@ -387,15 +387,36 @@ function initCustomerFilter() {
             tr.setAttribute('data-search', `${c.full_name} ${c.account_number} ${c.phone} ${c.location} ${c.collector_name}`);
 
             let cardColHtml = '';
-            if (c.card_id) {
+            if (c.card_id && c.card_status === 'completed') {
+                cardColHtml = `
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            <i class="fa-solid fa-award text-[10px]"></i>
+                            <span>31/31 Completed</span>
+                        </span>
+                        <span class="text-xs font-black text-emerald-950">${c.total_saved_formatted}</span>
+                    </div>
+                    <div class="text-[11px] font-bold mt-0.5 ${c.is_pending_payout ? 'text-purple-700' : 'text-emerald-700'}">
+                        ${c.is_pending_payout ? '⏳ Payout Pending Approval' : '🎯 Ready for Cashout'}
+                    </div>
+                `;
+            } else if (c.card_id) {
                 cardColHtml = `
                     <div class="font-bold text-steel_azure">${c.daily_amount_formatted} / space</div>
                     <div class="text-[11px] text-emerald-600 font-semibold">${c.spaces_filled} of ${c.total_spaces} spaces (${c.total_saved_formatted})</div>
                 `;
+            } else if (c.total_cards_count > 0) {
+                cardColHtml = `
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <span class="text-xs text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+                            Card Settled
+                        </span>
+                    </div>
+                `;
             } else {
                 cardColHtml = `
                     <div class="flex items-center gap-2">
-                        <span class="text-xs text-amber-600 font-semibold">No active card</span>
+                        <span class="text-xs text-amber-600 font-semibold">No card yet</span>
                         ${userRole === 'admin' ? `
                             <form method="POST" action="start_new_card.php" class="inline">
                                 <input type="hidden" name="customer_id" value="${c.id}">
@@ -412,7 +433,29 @@ function initCustomerFilter() {
             const floatColor = c.change_balance > 0 ? 'text-pumpkin_spice' : 'text-slate-400';
 
             let actionsHtml = '';
-            if (c.card_id) {
+            if (c.card_id && c.card_status === 'completed') {
+                if (userRole === 'admin') {
+                    actionsHtml += `
+                        <a href="request_payout.php?card_id=${c.card_id}" class="btn-touch px-3 py-1.5 bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-black rounded-xl shadow-2xs transition inline-flex items-center gap-1.5">
+                            <i class="fa-solid fa-hand-holding-dollar text-xs"></i>
+                            <span>Cash Out</span>
+                        </a>
+                    `;
+                } else {
+                    actionsHtml += `
+                        <a href="request_payout.php?card_id=${c.card_id}" class="btn-touch px-3 py-1.5 bg-steel_azure hover:bg-steel_azure-400 text-white text-xs font-black rounded-xl shadow-2xs transition inline-flex items-center gap-1.5">
+                            <i class="fa-solid fa-paper-plane text-xs"></i>
+                            <span>Request Payout</span>
+                        </a>
+                    `;
+                }
+                actionsHtml += `
+                    <a href="view_card.php?id=${c.card_id}" class="btn-touch px-3 py-1.5 bg-white hover:bg-platinum text-steel_azure border border-steel_azure text-xs font-bold rounded-xl transition inline-flex items-center gap-1.5">
+                        <i class="fa-solid fa-id-card text-xs"></i>
+                        <span>Card</span>
+                    </a>
+                `;
+            } else if (c.card_id) {
                 actionsHtml += `
                     <a href="record_deposit.php?customer_id=${c.id}" class="btn-touch px-3 py-1.5 bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-bold rounded-xl shadow-2xs transition inline-flex items-center gap-1.5">
                         <i class="fa-solid fa-plus text-xs"></i>
@@ -423,17 +466,27 @@ function initCustomerFilter() {
                         <span>Card</span>
                     </a>
                 `;
-            } else if (userRole === 'admin') {
-                actionsHtml += `
-                    <form method="POST" action="start_new_card.php" class="inline">
-                        <input type="hidden" name="customer_id" value="${c.id}">
-                        <input type="hidden" name="daily_amount" value="${c.daily_amount > 0 ? c.daily_amount : 20.00}">
-                        <button type="submit" class="btn-touch px-3 py-1.5 bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold rounded-xl shadow-2xs transition inline-flex items-center gap-1.5 cursor-pointer">
-                            <i class="fa-solid fa-circle-plus text-xs"></i>
-                            <span>+ Open Card</span>
-                        </button>
-                    </form>
-                `;
+            } else {
+                if (c.latest_card_id) {
+                    actionsHtml += `
+                        <a href="view_card.php?id=${c.latest_card_id}" class="btn-touch px-3 py-1.5 bg-white hover:bg-platinum text-steel_azure border border-steel_azure text-xs font-bold rounded-xl transition inline-flex items-center gap-1.5">
+                            <i class="fa-solid fa-clock-rotate-left text-xs"></i>
+                            <span>History</span>
+                        </a>
+                    `;
+                }
+                if (userRole === 'admin') {
+                    actionsHtml += `
+                        <form method="POST" action="start_new_card.php" class="inline">
+                            <input type="hidden" name="customer_id" value="${c.id}">
+                            <input type="hidden" name="daily_amount" value="${c.daily_amount > 0 ? c.daily_amount : 20.00}">
+                            <button type="submit" class="btn-touch px-3 py-1.5 bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold rounded-xl shadow-2xs transition inline-flex items-center gap-1.5 cursor-pointer">
+                                <i class="fa-solid fa-circle-plus text-xs"></i>
+                                <span>+ Open Card</span>
+                            </button>
+                        </form>
+                    `;
+                }
             }
 
             let genderBadge = '';
@@ -461,45 +514,57 @@ function initCustomerFilter() {
                         <span>${escapeHtml(c.location || 'Not specified')}</span>
                     </div>
                 </td>
-                <td class="py-3 px-4 text-slate-700 font-medium">${escapeHtml(c.collector_name || 'Unassigned')}</td>
-                <td class="py-3 px-4">${cardColHtml}</td>
-                <td class="py-3 px-4">
-                    <span class="font-bold ${floatColor}">${c.change_balance_formatted}</span>
+                <td class="py-3 px-4 text-slate-700 font-medium">
+                    ${escapeHtml(c.collector_name || 'Unassigned')}
                 </td>
-                <td class="py-3 px-4 text-right whitespace-nowrap">
-                    <div class="flex items-center justify-end gap-2">
+                <td class="py-3 px-4">
+                    ${cardColHtml}
+                </td>
+                <td class="py-3 px-4">
+                    <span class="font-bold ${floatColor}">
+                        ${c.change_balance_formatted}
+                    </span>
+                </td>
+                <td class="py-3 px-4 text-right">
+                    <div class="flex items-center justify-end gap-1.5">
                         ${actionsHtml}
+                        ${userRole === 'admin' ? `
+                            <button type="button" 
+                                    class="btn-touch px-2.5 py-1.5 bg-blue-50 hover:bg-steel_azure hover:text-white text-steel_azure border border-blue-200 text-xs font-bold rounded-xl transition inline-flex items-center justify-center gap-1.5 edit-cust-ajax-btn"
+                                    title="Edit Customer & Plan">
+                                <i class="fa-solid fa-pen-to-square text-xs"></i>
+                                <span>Edit</span>
+                            </button>
+                        ` : ''}
                     </div>
                 </td>
             `;
 
-            // Append Edit button safely with JS event listener if Admin
-            if (userRole === 'admin' && typeof window.openEditCustomerModal === 'function') {
-                const actionsContainer = tr.querySelector('td:last-child > div');
-                const editBtn = document.createElement('button');
-                editBtn.type = 'button';
-                editBtn.className = 'btn-touch px-2.5 py-1.5 bg-blue-50 hover:bg-steel_azure hover:text-white text-steel_azure border border-blue-200 text-xs font-bold rounded-xl transition inline-flex items-center gap-1.5 cursor-pointer';
-                editBtn.title = 'Edit Customer & Plan';
-                editBtn.innerHTML = '<i class="fa-solid fa-pen-to-square text-xs"></i><span>Edit</span>';
-                editBtn.addEventListener('click', () => {
-                    window.openEditCustomerModal({
-                        id: c.id,
-                        full_name: c.full_name,
-                        gender: c.gender || '',
-                        account_number: c.account_number,
-                        phone: c.phone,
-                        location: c.location,
-                        collector_id: c.assigned_collector_id,
-                        collector_name: c.collector_name,
-                        card_id: c.card_id,
-                        card_number: c.card_number,
-                        daily_amount: c.daily_amount,
-                        spaces_filled: c.spaces_filled,
-                        total_spaces: c.total_spaces,
-                        total_saved: c.total_saved
+            // Attach edit customer button event if admin
+            if (userRole === 'admin') {
+                const editBtn = tr.querySelector('.edit-cust-ajax-btn');
+                if (editBtn) {
+                    editBtn.addEventListener('click', () => {
+                        if (typeof openEditCustomerModal === 'function') {
+                            openEditCustomerModal({
+                                id: c.id,
+                                full_name: c.full_name,
+                                gender: c.gender || '',
+                                account_number: c.account_number,
+                                phone: c.phone,
+                                location: c.location,
+                                collector_id: c.assigned_collector_id,
+                                collector_name: c.collector_name || 'Unassigned',
+                                card_id: c.card_id,
+                                card_number: c.card_number,
+                                daily_amount: c.daily_amount,
+                                spaces_filled: c.spaces_filled,
+                                total_spaces: c.total_spaces,
+                                total_saved: c.total_saved
+                            });
+                        }
                     });
-                });
-                actionsContainer.appendChild(editBtn);
+                }
             }
 
             tableBody.appendChild(tr);
@@ -513,7 +578,13 @@ function initCustomerFilter() {
             card.setAttribute('data-search', `${c.full_name} ${c.account_number} ${c.phone} ${c.location} ${c.collector_name}`);
 
             let cardHeaderBadge = '';
-            if (c.card_id) {
+            if (c.card_id && c.card_status === 'completed') {
+                cardHeaderBadge = `
+                    <span class="text-xs font-black text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-lg border border-emerald-300">
+                        31/31 Completed
+                    </span>
+                `;
+            } else if (c.card_id) {
                 cardHeaderBadge = `
                     <span class="text-xs font-bold text-steel_azure bg-platinum px-2 py-0.5 rounded border border-silver-600">
                         ${c.daily_amount_formatted}
@@ -522,7 +593,14 @@ function initCustomerFilter() {
             }
 
             let cardSavedDetails = '';
-            if (c.card_id) {
+            if (c.card_id && c.card_status === 'completed') {
+                cardSavedDetails = `
+                    <div class="mt-2 text-xs text-slate-600 flex items-center justify-between">
+                        <div>Total Saved: <strong class="text-emerald-700 font-black">${c.total_saved_formatted}</strong></div>
+                        <span class="text-[11px] font-bold text-emerald-700">${c.is_pending_payout ? '⏳ Pending' : '🎯 Ready for Cashout'}</span>
+                    </div>
+                `;
+            } else if (c.card_id) {
                 cardSavedDetails = `
                     <div class="mt-2 text-xs text-slate-600">
                         Saved: <strong class="text-emerald-700">${c.total_saved_formatted}</strong> (${c.spaces_filled}/${c.total_spaces} spaces)
@@ -539,7 +617,29 @@ function initCustomerFilter() {
             }
 
             let mobileActions = '';
-            if (c.card_id) {
+            if (c.card_id && c.card_status === 'completed') {
+                if (userRole === 'admin') {
+                    mobileActions += `
+                        <a href="request_payout.php?card_id=${c.card_id}" class="flex-1 btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-black py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-2xs">
+                            <i class="fa-solid fa-hand-holding-dollar text-xs"></i>
+                            <span>Cash Out</span>
+                        </a>
+                    `;
+                } else {
+                    mobileActions += `
+                        <a href="request_payout.php?card_id=${c.card_id}" class="flex-1 btn-touch bg-steel_azure hover:bg-steel_azure-400 text-white text-xs font-black py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-2xs">
+                            <i class="fa-solid fa-paper-plane text-xs"></i>
+                            <span>Request Payout</span>
+                        </a>
+                    `;
+                }
+                mobileActions += `
+                    <a href="view_card.php?id=${c.card_id}" class="btn-touch px-3 bg-white hover:bg-platinum text-steel_azure border border-steel_azure text-xs font-bold py-2 rounded-xl flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-id-card text-xs"></i>
+                        <span>Card</span>
+                    </a>
+                `;
+            } else if (c.card_id) {
                 mobileActions += `
                     <a href="record_deposit.php?customer_id=${c.id}" class="flex-1 btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-bold py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-2xs">
                         <i class="fa-solid fa-plus text-xs"></i>
@@ -550,17 +650,27 @@ function initCustomerFilter() {
                         <span>Card</span>
                     </a>
                 `;
-            } else if (userRole === 'admin') {
-                mobileActions += `
-                    <form method="POST" action="start_new_card.php" class="flex-1">
-                        <input type="hidden" name="customer_id" value="${c.id}">
-                        <input type="hidden" name="daily_amount" value="${c.daily_amount > 0 ? c.daily_amount : 20.00}">
-                        <button type="submit" class="w-full btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer">
-                            <i class="fa-solid fa-circle-plus text-xs"></i>
-                            <span>+ Open Susu Card</span>
-                        </button>
-                    </form>
-                `;
+            } else {
+                if (c.latest_card_id) {
+                    mobileActions += `
+                        <a href="view_card.php?id=${c.latest_card_id}" class="btn-touch px-3 bg-white hover:bg-platinum text-steel_azure border border-steel_azure text-xs font-bold py-2 rounded-xl flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-clock-rotate-left text-xs"></i>
+                            <span>History</span>
+                        </a>
+                    `;
+                }
+                if (userRole === 'admin') {
+                    mobileActions += `
+                        <form method="POST" action="start_new_card.php" class="flex-1">
+                            <input type="hidden" name="customer_id" value="${c.id}">
+                            <input type="hidden" name="daily_amount" value="${c.daily_amount > 0 ? c.daily_amount : 20.00}">
+                            <button type="submit" class="w-full btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer">
+                                <i class="fa-solid fa-circle-plus text-xs"></i>
+                                <span>+ Open Susu Card</span>
+                            </button>
+                        </form>
+                    `;
+                }
             }
 
             card.innerHTML = `

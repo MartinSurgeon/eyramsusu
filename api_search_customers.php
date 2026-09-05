@@ -24,16 +24,46 @@ $pdo = get_db_connection();
 $searchWildcard = '%' . $query . '%';
 
 try {
+    $selectFields = "
+        c.id, c.account_number, c.full_name, c.gender, c.phone, c.location, c.change_balance,
+        c.assigned_collector_id, u.full_name AS collector_name,
+        act_sc.id AS active_card_id, act_sc.card_number AS active_card_number, act_sc.daily_amount AS active_daily_amount,
+        act_sc.spaces_filled AS active_spaces_filled, act_sc.total_spaces AS active_total_spaces, act_sc.total_saved AS active_total_saved,
+        comp_sc.id AS completed_card_id, comp_sc.card_number AS completed_card_number, comp_sc.daily_amount AS completed_daily_amount,
+        comp_sc.spaces_filled AS completed_spaces_filled, comp_sc.total_spaces AS completed_total_spaces, comp_sc.total_saved AS completed_total_saved,
+        comp_p.id AS completed_payout_id, comp_p.status AS completed_payout_status,
+        latest_sc.id AS latest_card_id,
+        (SELECT COUNT(*) FROM susu_cards WHERE customer_id = c.id) as total_cards_count
+    ";
+
+    $joins = "
+        LEFT JOIN users u ON c.assigned_collector_id = u.id
+        LEFT JOIN susu_cards act_sc ON act_sc.id = (
+            SELECT id FROM susu_cards 
+            WHERE customer_id = c.id AND status = 'active' 
+            ORDER BY id DESC LIMIT 1
+        )
+        LEFT JOIN susu_cards comp_sc ON comp_sc.id = (
+            SELECT sc2.id FROM susu_cards sc2
+            WHERE sc2.customer_id = c.id 
+              AND (sc2.status = 'completed' OR sc2.spaces_filled >= sc2.total_spaces)
+              AND NOT EXISTS (
+                  SELECT 1 FROM payouts p_paid WHERE p_paid.card_id = sc2.id AND p_paid.status = 'paid'
+              )
+            ORDER BY sc2.id DESC LIMIT 1
+        )
+        LEFT JOIN payouts comp_p ON comp_p.card_id = comp_sc.id AND comp_p.status = 'pending'
+        LEFT JOIN susu_cards latest_sc ON latest_sc.id = (
+            SELECT id FROM susu_cards WHERE customer_id = c.id ORDER BY id DESC LIMIT 1
+        )
+    ";
+
     if ($user['role'] === 'collector') {
         // Collector only searches their assigned active clients
         $sql = "
-            SELECT c.id, c.account_number, c.full_name, c.gender, c.phone, c.location, c.change_balance,
-                   c.assigned_collector_id, u.full_name AS collector_name,
-                   sc.id AS card_id, sc.card_number, sc.daily_amount, sc.spaces_filled, 
-                   sc.total_spaces, sc.total_saved, sc.status AS card_status
+            SELECT {$selectFields}
             FROM customers c
-            LEFT JOIN users u ON c.assigned_collector_id = u.id
-            LEFT JOIN susu_cards sc ON c.id = sc.customer_id AND sc.status = 'active'
+            {$joins}
             WHERE c.is_active = 1 
               AND c.assigned_collector_id = ?
               AND (
@@ -42,7 +72,7 @@ try {
                   c.phone LIKE ? OR 
                   c.location LIKE ?
               )
-            ORDER BY c.full_name ASC
+            ORDER BY (comp_sc.id IS NOT NULL) DESC, c.full_name ASC
             LIMIT 30
         ";
         $stmt = $pdo->prepare($sql);
@@ -56,13 +86,9 @@ try {
     } else {
         // Admin searches all active clients across the entire database
         $sql = "
-            SELECT c.id, c.account_number, c.full_name, c.gender, c.phone, c.location, c.change_balance,
-                   c.assigned_collector_id, u.full_name AS collector_name,
-                   sc.id AS card_id, sc.card_number, sc.daily_amount, sc.spaces_filled, 
-                   sc.total_spaces, sc.total_saved, sc.status AS card_status
+            SELECT {$selectFields}
             FROM customers c
-            LEFT JOIN users u ON c.assigned_collector_id = u.id
-            LEFT JOIN susu_cards sc ON c.id = sc.customer_id AND sc.status = 'active'
+            {$joins}
             WHERE c.is_active = 1 
               AND (
                   c.full_name LIKE ? OR 
@@ -71,7 +97,7 @@ try {
                   c.location LIKE ? OR
                   u.full_name LIKE ?
               )
-            ORDER BY c.full_name ASC
+            ORDER BY (comp_sc.id IS NOT NULL) DESC, c.full_name ASC
             LIMIT 30
         ";
         $stmt = $pdo->prepare($sql);
@@ -88,6 +114,35 @@ try {
 
     // Format fields for frontend consumption
     $formatted = array_map(function ($c) {
+        $hasCompleted = !empty($c['completed_card_id']);
+        $hasActive = !empty($c['active_card_id']);
+
+        if ($hasCompleted) {
+            $cardId = (int)$c['completed_card_id'];
+            $cardNumber = (int)$c['completed_card_number'];
+            $dailyAmount = (float)$c['completed_daily_amount'];
+            $spacesFilled = (int)$c['completed_spaces_filled'];
+            $totalSpaces = (int)$c['completed_total_spaces'];
+            $totalSaved = (float)$c['completed_total_saved'];
+            $cardStatus = 'completed';
+        } elseif ($hasActive) {
+            $cardId = (int)$c['active_card_id'];
+            $cardNumber = (int)$c['active_card_number'];
+            $dailyAmount = (float)$c['active_daily_amount'];
+            $spacesFilled = (int)$c['active_spaces_filled'];
+            $totalSpaces = (int)$c['active_total_spaces'];
+            $totalSaved = (float)$c['active_total_saved'];
+            $cardStatus = 'active';
+        } else {
+            $cardId = null;
+            $cardNumber = null;
+            $dailyAmount = 20.00;
+            $spacesFilled = 0;
+            $totalSpaces = 31;
+            $totalSaved = 0.00;
+            $cardStatus = 'none';
+        }
+
         return [
             'id' => (int)$c['id'],
             'account_number' => $c['account_number'],
@@ -99,15 +154,19 @@ try {
             'change_balance_formatted' => format_money($c['change_balance']),
             'assigned_collector_id' => $c['assigned_collector_id'] ? (int)$c['assigned_collector_id'] : null,
             'collector_name' => $c['collector_name'] ?: 'Unassigned',
-            'card_id' => $c['card_id'] ? (int)$c['card_id'] : null,
-            'card_number' => $c['card_number'] ? (int)$c['card_number'] : null,
-            'daily_amount' => $c['daily_amount'] !== null ? (float)$c['daily_amount'] : null,
-            'daily_amount_formatted' => $c['daily_amount'] !== null ? format_money($c['daily_amount']) : null,
-            'spaces_filled' => $c['spaces_filled'] !== null ? (int)$c['spaces_filled'] : 0,
-            'total_spaces' => $c['total_spaces'] !== null ? (int)$c['total_spaces'] : 31,
-            'total_saved' => $c['total_saved'] !== null ? (float)$c['total_saved'] : 0.00,
-            'total_saved_formatted' => $c['total_saved'] !== null ? format_money($c['total_saved']) : 'GH₵ 0.00',
-            'card_status' => $c['card_status'] ?: 'none'
+            'card_id' => $cardId,
+            'card_number' => $cardNumber,
+            'daily_amount' => $dailyAmount,
+            'daily_amount_formatted' => format_money($dailyAmount),
+            'spaces_filled' => $spacesFilled,
+            'total_spaces' => $totalSpaces,
+            'total_saved' => $totalSaved,
+            'total_saved_formatted' => format_money($totalSaved),
+            'card_status' => $cardStatus,
+            'is_completed' => $hasCompleted,
+            'is_pending_payout' => !empty($c['completed_payout_id']),
+            'latest_card_id' => !empty($c['latest_card_id']) ? (int)$c['latest_card_id'] : null,
+            'total_cards_count' => (int)($c['total_cards_count'] ?? 0)
         ];
     }, $results);
 

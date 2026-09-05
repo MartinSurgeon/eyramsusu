@@ -116,6 +116,98 @@ function calculate_payout_breakdown($card_id) {
 }
 
 /**
+ * Fetches all Susu Cards for a specific customer, including current active and past completed cards,
+ * with payout status and details.
+ *
+ * @param int $customerId
+ * @return array List of cards ordered latest first
+ */
+function get_customer_card_history(int $customerId): array {
+    $pdo = get_db_connection();
+    $stmt = $pdo->prepare("
+        SELECT sc.*,
+               p.id as payout_id,
+               p.status as payout_status,
+               p.customer_payout,
+               p.business_fee,
+               p.paid_at,
+               p.created_at as payout_requested_at,
+               p.reason as payout_reason,
+               p.approved_by,
+               admin.full_name as approved_by_name,
+               col.full_name as payout_requested_by_name
+        FROM susu_cards sc
+        LEFT JOIN payouts p ON p.card_id = sc.id AND p.status IN ('pending', 'approved', 'paid')
+        LEFT JOIN users admin ON p.approved_by = admin.id
+        LEFT JOIN users col ON p.collector_id = col.id
+        WHERE sc.customer_id = ?
+        ORDER BY sc.id DESC
+    ");
+    $stmt->execute([$customerId]);
+    $cards = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($cards as &$c) {
+        $c['is_active'] = ($c['status'] === 'active');
+        $c['is_completed'] = ((int)$c['spaces_filled'] >= (int)$c['total_spaces'] || $c['status'] === 'completed');
+        $c['is_paid'] = ($c['payout_status'] === 'paid');
+        $c['is_pending_payout'] = ($c['payout_status'] === 'pending');
+        $c['is_ready_for_payout'] = ($c['is_completed'] && !$c['is_paid'] && !$c['is_pending_payout']);
+    }
+    unset($c);
+
+    return $cards;
+}
+
+/**
+ * Fetches cards that are eligible for payout / cashout:
+ * - Either completed (31 spaces filled / status = 'completed') OR active with savings
+ * - Has not yet been paid out (no paid payout record)
+ *
+ * @param int|null $collectorId If provided, filters to customers assigned to this collector
+ * @return array
+ */
+function get_cards_eligible_for_payout(?int $collectorId = null): array {
+    $pdo = get_db_connection();
+    $sql = "
+        SELECT sc.id, sc.customer_id, sc.card_number, sc.daily_amount, sc.spaces_filled, sc.total_spaces, sc.total_saved, sc.status as card_status,
+               c.full_name, c.account_number, c.change_balance, c.phone, c.location,
+               u.full_name as collector_name,
+               p.id as pending_payout_id, p.status as payout_status
+        FROM susu_cards sc
+        JOIN customers c ON sc.customer_id = c.id
+        LEFT JOIN users u ON c.assigned_collector_id = u.id
+        LEFT JOIN payouts p ON p.card_id = sc.id AND p.status = 'pending'
+        WHERE sc.spaces_filled > 0
+          AND sc.status IN ('active', 'completed')
+          AND NOT EXISTS (
+              SELECT 1 FROM payouts p_paid 
+              WHERE p_paid.card_id = sc.id AND p_paid.status = 'paid'
+          )
+    ";
+    $params = [];
+    if ($collectorId !== null) {
+        $sql .= " AND c.assigned_collector_id = ?";
+        $params[] = $collectorId;
+    }
+    $sql .= " ORDER BY (sc.spaces_filled >= sc.total_spaces) DESC, sc.spaces_filled DESC, c.full_name ASC";
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($rows as &$r) {
+        $r['is_completed'] = ((int)$r['spaces_filled'] >= (int)$r['total_spaces'] || $r['card_status'] === 'completed');
+        $r['is_pending'] = (!empty($r['pending_payout_id']));
+        // Compute estimated payout
+        $fee = min((float)$r['daily_amount'], (float)$r['total_saved']);
+        $r['estimated_payout'] = max(0, (float)$r['total_saved'] - $fee) + (float)$r['change_balance'];
+    }
+    unset($r);
+
+    return $rows;
+}
+
+/**
  * Calculate a Collector's current Cash in Hand (unsettled collections)
  */
 function get_collector_cash_in_hand($collector_id) {

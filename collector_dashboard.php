@@ -21,17 +21,77 @@ $stmtToday = $pdo->prepare("
 $stmtToday->execute([$collectorId]);
 $todayStats = $stmtToday->fetch();
 
-// Fetch assigned customers with their active Susu Card
+// Fetch assigned customers with their active or completed Susu Card
 $stmtCust = $pdo->prepare("
     SELECT c.*, 
-           sc.id as card_id, sc.card_number, sc.daily_amount, sc.spaces_filled, sc.total_spaces, sc.total_saved, sc.status as card_status
+           act_sc.id as active_card_id,
+           act_sc.card_number as active_card_number,
+           act_sc.daily_amount as active_daily_amount,
+           act_sc.spaces_filled as active_spaces_filled,
+           act_sc.total_spaces as active_total_spaces,
+           act_sc.total_saved as active_total_saved,
+           comp_sc.id as completed_card_id,
+           comp_sc.card_number as completed_card_number,
+           comp_sc.daily_amount as completed_daily_amount,
+           comp_sc.spaces_filled as completed_spaces_filled,
+           comp_sc.total_spaces as completed_total_spaces,
+           comp_sc.total_saved as completed_total_saved,
+           comp_p.id as completed_payout_id,
+           latest_sc.id as latest_card_id
     FROM customers c
-    LEFT JOIN susu_cards sc ON c.id = sc.customer_id AND sc.status = 'active'
+    LEFT JOIN susu_cards act_sc ON act_sc.id = (
+        SELECT id FROM susu_cards 
+        WHERE customer_id = c.id AND status = 'active' 
+        ORDER BY id DESC LIMIT 1
+    )
+    LEFT JOIN susu_cards comp_sc ON comp_sc.id = (
+        SELECT sc2.id FROM susu_cards sc2
+        WHERE sc2.customer_id = c.id 
+          AND (sc2.status = 'completed' OR sc2.spaces_filled >= sc2.total_spaces)
+          AND NOT EXISTS (
+              SELECT 1 FROM payouts p_paid WHERE p_paid.card_id = sc2.id AND p_paid.status = 'paid'
+          )
+        ORDER BY sc2.id DESC LIMIT 1
+    )
+    LEFT JOIN payouts comp_p ON comp_p.card_id = comp_sc.id AND comp_p.status = 'pending'
+    LEFT JOIN susu_cards latest_sc ON latest_sc.id = (
+        SELECT id FROM susu_cards WHERE customer_id = c.id ORDER BY id DESC LIMIT 1
+    )
     WHERE c.assigned_collector_id = ? AND c.is_active = 1
-    ORDER BY c.full_name ASC
+    ORDER BY (comp_sc.id IS NOT NULL) DESC, c.full_name ASC
 ");
 $stmtCust->execute([$collectorId]);
-$myCustomers = $stmtCust->fetchAll();
+$myCustomers = $stmtCust->fetchAll(PDO::FETCH_ASSOC);
+
+foreach ($myCustomers as &$c) {
+    if (!empty($c['completed_card_id'])) {
+        $c['card_id'] = $c['completed_card_id'];
+        $c['card_number'] = $c['completed_card_number'];
+        $c['daily_amount'] = (float)$c['completed_daily_amount'];
+        $c['spaces_filled'] = (int)$c['completed_spaces_filled'];
+        $c['total_spaces'] = (int)$c['completed_total_spaces'];
+        $c['total_saved'] = (float)$c['completed_total_saved'];
+        $c['card_status'] = 'completed';
+    } elseif (!empty($c['active_card_id'])) {
+        $c['card_id'] = $c['active_card_id'];
+        $c['card_number'] = $c['active_card_number'];
+        $c['daily_amount'] = (float)$c['active_daily_amount'];
+        $c['spaces_filled'] = (int)$c['active_spaces_filled'];
+        $c['total_spaces'] = (int)$c['active_total_spaces'];
+        $c['total_saved'] = (float)$c['active_total_saved'];
+        $c['card_status'] = 'active';
+    } else {
+        $c['card_id'] = null;
+        $c['card_number'] = null;
+        $c['daily_amount'] = 20.00;
+        $c['spaces_filled'] = 0;
+        $c['total_spaces'] = 31;
+        $c['total_saved'] = 0.00;
+        $c['card_status'] = null;
+    }
+}
+unset($c);
+
 $totalAssignedCount = count($myCustomers);
 $activeCardsCount = count(array_filter($myCustomers, fn($c) => !empty($c['card_id'])));
 
@@ -144,7 +204,17 @@ require_once __DIR__ . '/includes/header.php';
                             </div>
 
                             <!-- Card Progress -->
-                            <?php if ($cust['card_id']): ?>
+                            <?php if ($cust['card_id'] && $cust['card_status'] === 'completed'): ?>
+                                <div class="mt-2 text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+                                    <span class="flex items-center gap-1.5">
+                                        <i class="fa-solid fa-award text-emerald-600 text-sm"></i>
+                                        <span>31/31 Completed &bull; Saved: <strong class="text-emerald-950 font-black"><?= format_money($cust['total_saved']) ?></strong></span>
+                                    </span>
+                                    <span class="text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded-md bg-white border border-emerald-300">
+                                        <?= !empty($cust['completed_payout_id']) ? '⏳ Pending' : '🎯 Ready' ?>
+                                    </span>
+                                </div>
+                            <?php elseif ($cust['card_id']): ?>
                                 <div class="mt-2.5 flex items-center gap-2">
                                     <div class="flex-1 max-w-xs bg-silver-700 rounded-full h-2 overflow-hidden">
                                         <?php $pct = round(($cust['spaces_filled'] / $cust['total_spaces']) * 100); ?>
@@ -173,7 +243,18 @@ require_once __DIR__ . '/includes/header.php';
 
                         <!-- Action Buttons (Hick's Law: Primary + Secondary) -->
                         <div class="flex items-center gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-silver-600/40">
-                            <?php if ($cust['card_id']): ?>
+                            <?php if ($cust['card_id'] && $cust['card_status'] === 'completed'): ?>
+                                <a href="request_payout.php?card_id=<?= $cust['card_id'] ?>" 
+                                   class="btn-touch flex-1 sm:flex-none bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-black px-3.5 py-2 rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer">
+                                    <i class="fa-solid fa-paper-plane text-xs"></i>
+                                    <span>Request Payout</span>
+                                </a>
+                                <a href="view_card.php?id=<?= $cust['card_id'] ?>" 
+                                   class="btn-touch flex-1 sm:flex-none bg-white hover:bg-platinum text-steel_azure border border-steel_azure text-xs font-bold px-3 py-2 rounded-xl transition flex items-center justify-center gap-1">
+                                    <i class="fa-solid fa-id-card text-xs"></i>
+                                    <span>Card</span>
+                                </a>
+                            <?php elseif ($cust['card_id']): ?>
                                 <a href="record_deposit.php?customer_id=<?= $cust['id'] ?>" 
                                    class="btn-touch flex-1 sm:flex-none bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold px-3 py-2 shadow-sm transition flex items-center justify-center gap-1">
                                     <i class="fa-solid fa-plus text-xs"></i>

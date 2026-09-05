@@ -65,14 +65,26 @@ foreach ($depositsList as $dep) {
 }
 
 // Check for existing payout on this card
-$stmtPayout = $pdo->prepare("SELECT * FROM payouts WHERE card_id = ? ORDER BY id DESC LIMIT 1");
+$stmtPayout = $pdo->prepare("
+    SELECT p.*, admin.full_name as approved_by_name 
+    FROM payouts p 
+    LEFT JOIN users admin ON p.approved_by = admin.id 
+    WHERE p.card_id = ? 
+    ORDER BY p.id DESC LIMIT 1
+");
 $stmtPayout->execute([$cardId]);
 $payout = $stmtPayout->fetch();
 
-// Check if customer already has another active card
-$stmtActive = $pdo->prepare("SELECT id, card_number FROM susu_cards WHERE customer_id = ? AND status = 'active' LIMIT 1");
-$stmtActive->execute([$card['customer_id']]);
-$otherActiveCard = $stmtActive->fetch();
+// Fetch all cards for this customer (Card History)
+$customerCards = get_customer_card_history((int)$card['customer_id']);
+$otherActiveCard = null;
+foreach ($customerCards as $cItem) {
+    if ($cItem['is_active'] && (int)$cItem['id'] !== $cardId) {
+        $otherActiveCard = $cItem;
+        break;
+    }
+}
+$payoutCalc = calculate_payout_breakdown($cardId);
 
 $pageTitle = "Susu Card #" . $card['card_number'] . " - " . $card['full_name'];
 require_once __DIR__ . '/includes/header.php';
@@ -120,20 +132,150 @@ require_once __DIR__ . '/includes/header.php';
         </div>
     </div>
 
-    <!-- Celebratory Banner for Completed Cards (Peak-End Rule: Prominent Next Step CTA) -->
-    <?php if ($card['status'] === 'completed'): ?>
-        <div class="celebration-banner flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-5">
-            <div>
-                <div class="text-base sm:text-lg font-black text-emerald-800">🎉 Card Completed!</div>
-                <p class="text-xs font-semibold text-emerald-700 mt-0.5">All 31 spaces have been successfully filled. This Susu cycle is complete.</p>
+    <!-- Card History Switcher / Timeline Carousel (HCI: Fitts's & Jakob's Law) -->
+    <?php if (!empty($customerCards)): ?>
+        <div class="bg-white rounded-2xl border border-silver-600 shadow-xs p-3.5 sm:p-4 no-print">
+            <div class="flex items-center justify-between mb-2.5">
+                <div class="flex items-center gap-2">
+                    <div class="w-7 h-7 rounded-lg bg-blue-50 text-steel_azure flex items-center justify-center text-xs">
+                        <i class="fa-solid fa-layer-group"></i>
+                    </div>
+                    <span class="text-xs font-black text-slate-800 uppercase tracking-wider">Passbook Cards History</span>
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-steel_azure text-white">
+                        <?= count($customerCards) ?> <?= count($customerCards) === 1 ? 'card' : 'cards' ?>
+                    </span>
+                </div>
+                <span class="text-[11px] text-slate-400 font-medium hidden sm:inline">Select a card to inspect all 31 spaces</span>
+            </div>
+
+            <!-- Horizontal scrollable card tabs -->
+            <div class="flex items-center gap-2 overflow-x-auto pb-1 pt-0.5 scrollbar-thin">
+                <?php foreach ($customerCards as $cItem): 
+                    $isSelected = ((int)$cItem['id'] === $cardId);
+                    $badgeClass = '';
+                    $badgeText = '';
+                    if ($cItem['is_active']) {
+                        $badgeClass = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                        $badgeText = "Active ({$cItem['spaces_filled']}/{$cItem['total_spaces']})";
+                    } elseif ($cItem['is_paid']) {
+                        $badgeClass = 'bg-blue-50 text-steel_azure border-blue-200';
+                        $badgeText = "Settled (" . format_money($cItem['customer_payout']) . ")";
+                    } elseif ($cItem['is_pending_payout']) {
+                        $badgeClass = 'bg-amber-50 text-amber-700 border-amber-200';
+                        $badgeText = "Payout Pending";
+                    } elseif ($cItem['is_completed']) {
+                        $badgeClass = 'bg-purple-50 text-purple-700 border-purple-200';
+                        $badgeText = "Completed (31/31)";
+                    } else {
+                        $badgeClass = 'bg-slate-100 text-slate-600 border-slate-200';
+                        $badgeText = "Closed ({$cItem['spaces_filled']} sp)";
+                    }
+                ?>
+                    <a href="view_card.php?id=<?= $cItem['id'] ?>"
+                       class="btn-touch flex-shrink-0 px-3.5 py-2 rounded-xl text-xs transition flex items-center gap-2 <?= $isSelected ? 'bg-steel_azure text-white shadow-md ring-2 ring-steel_azure/30 font-black' : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold' ?>">
+                        <span>Card #<?= $cItem['card_number'] ?></span>
+                        <span class="text-[10px] px-1.5 py-0.5 rounded font-semibold border <?= $isSelected ? 'bg-white/20 text-white border-white/30' : $badgeClass ?>">
+                            <?= $badgeText ?>
+                        </span>
+                    </a>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    <?php endif; ?>
+
+    <!-- Smart Action Banners: Completed / Ready for Cashout / Pending / Settled -->
+    <?php if (($card['status'] === 'completed' || (int)$card['spaces_filled'] >= (int)$card['total_spaces']) && (!$payout || $payout['status'] === 'rejected')): ?>
+        <!-- Ready for Cashout Banner -->
+        <div class="p-5 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-100 border-2 border-emerald-400 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div class="flex items-start gap-3.5">
+                <div class="w-12 h-12 rounded-2xl bg-emerald-500 text-white flex items-center justify-center text-xl flex-shrink-0 shadow-sm">
+                    <i class="fa-solid fa-award"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-base font-black text-emerald-900">🎉 Susu Card Completed!</span>
+                        <span class="px-2 py-0.5 text-[10px] font-black bg-emerald-600 text-white rounded-md uppercase">31/31 Spaces Filled</span>
+                    </div>
+                    <p class="text-xs text-emerald-800 mt-1 font-medium leading-relaxed">
+                        Total Saved: <strong class="text-emerald-900"><?= format_money($card['total_saved']) ?></strong> &bull;
+                        Business Fee: <strong><?= format_money($payoutCalc['business_fee'] ?? $card['daily_amount']) ?></strong> &bull;
+                        Net Client Cashout: <strong class="text-emerald-950 font-black text-sm"><?= format_money($payoutCalc['customer_payout'] ?? ($card['total_saved'] - $card['daily_amount'])) ?></strong>
+                    </p>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2.5 flex-shrink-0">
+                <?php if ($user['role'] === 'admin'): ?>
+                    <button type="button" onclick="openCashoutModal()" 
+                            class="btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs sm:text-sm font-extrabold px-5 py-2.5 shadow-md rounded-xl inline-flex items-center gap-2 cursor-pointer transition">
+                        <i class="fa-solid fa-hand-holding-dollar text-sm"></i>
+                        <span>Cash Out Now</span>
+                    </button>
+                <?php else: ?>
+                    <a href="request_payout.php?card_id=<?= $cardId ?>" 
+                       class="btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs sm:text-sm font-extrabold px-5 py-2.5 shadow-md rounded-xl inline-flex items-center gap-2 cursor-pointer transition">
+                        <i class="fa-solid fa-paper-plane text-sm"></i>
+                        <span>Request Payout for Client</span>
+                    </a>
+                <?php endif; ?>
+
+                <?php if ($user['role'] === 'admin' && !$otherActiveCard): ?>
+                    <form method="POST" action="start_new_card.php" class="inline">
+                        <input type="hidden" name="customer_id" value="<?= $card['customer_id'] ?>">
+                        <input type="hidden" name="daily_amount" value="<?= $card['daily_amount'] ?>">
+                        <button type="submit" class="btn-touch bg-white hover:bg-slate-50 text-steel_azure border border-steel_azure text-xs font-bold px-4 py-2.5 rounded-xl transition inline-flex items-center gap-1.5 cursor-pointer">
+                            <i class="fa-solid fa-circle-plus text-xs"></i>
+                            <span>Open Next Card</span>
+                        </button>
+                    </form>
+                <?php endif; ?>
+            </div>
+        </div>
+
+    <?php elseif ($payout && $payout['status'] === 'pending'): ?>
+        <!-- Payout Request Pending Approval Banner -->
+        <div class="p-4 sm:p-5 rounded-2xl bg-amber-50 border-2 border-amber-300 shadow-2xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center text-lg flex-shrink-0 shadow-xs">
+                    <i class="fa-solid fa-hourglass-half"></i>
+                </div>
+                <div>
+                    <div class="text-sm font-black text-amber-900">Payout Request Pending Approval</div>
+                    <div class="text-xs text-amber-800 mt-0.5">
+                        Amount: <strong class="text-amber-950 font-black"><?= format_money($payout['customer_payout']) ?></strong> &bull;
+                        Requested on <?= date('M d, Y', strtotime($payout['created_at'])) ?>
+                    </div>
+                </div>
+            </div>
+            <?php if ($user['role'] === 'admin'): ?>
+                <a href="payouts.php" class="btn-touch bg-steel_azure hover:bg-steel_azure-400 text-white text-xs font-extrabold px-4 py-2 rounded-xl shadow-xs inline-flex items-center gap-1.5 flex-shrink-0">
+                    <span>Review & Approve Payout</span>
+                    <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                </a>
+            <?php endif; ?>
+        </div>
+
+    <?php elseif ($payout && $payout['status'] === 'paid'): ?>
+        <!-- Card Settled & Paid Out Banner -->
+        <div class="p-4 sm:p-5 rounded-2xl bg-blue-50/80 border border-blue-200 shadow-2xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-steel_azure text-white flex items-center justify-center text-lg flex-shrink-0 shadow-xs">
+                    <i class="fa-solid fa-circle-check"></i>
+                </div>
+                <div>
+                    <div class="text-sm font-black text-steel_azure">Card Settled & Paid Out</div>
+                    <div class="text-xs text-slate-600 mt-0.5">
+                        Net Payout of <strong class="text-slate-800"><?= format_money($payout['customer_payout']) ?></strong> paid on <?= date('M d, Y', strtotime($payout['paid_at'])) ?><?= !empty($payout['approved_by_name']) ? ' by ' . htmlspecialchars($payout['approved_by_name']) : '' ?> &bull; Fee retained: <?= format_money($payout['business_fee']) ?>.
+                    </div>
+                </div>
             </div>
             <?php if ($user['role'] === 'admin' && !$otherActiveCard): ?>
                 <form method="POST" action="start_new_card.php" class="flex-shrink-0">
                     <input type="hidden" name="customer_id" value="<?= $card['customer_id'] ?>">
                     <input type="hidden" name="daily_amount" value="<?= $card['daily_amount'] ?>">
-                    <button type="submit" class="btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs sm:text-sm font-extrabold px-5 py-2.5 shadow-md rounded-xl inline-flex items-center gap-2 cursor-pointer">
-                        <i class="fa-solid fa-circle-plus text-sm"></i>
-                        <span>+ Open Next Susu Card (#<?= $card['card_number'] + 1 ?>)</span>
+                    <button type="submit" class="btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold px-4 py-2 rounded-xl shadow-xs inline-flex items-center gap-1.5 cursor-pointer">
+                        <i class="fa-solid fa-circle-plus text-xs"></i>
+                        <span>+ Open Next Card (#<?= $card['card_number'] + 1 ?>)</span>
                     </button>
                 </form>
             <?php endif; ?>
@@ -560,10 +702,103 @@ require_once __DIR__ . '/includes/header.php';
             </div>
         </form>
 
+    <!-- CASHOUT CONFIRMATION MODAL (Admin Cashout Execution) -->
+<div id="cashout_confirm_modal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-xs hidden" role="dialog" aria-modal="true" aria-labelledby="cashout_modal_title">
+    <div class="bg-white rounded-3xl border border-silver-600 shadow-2xl max-w-lg w-full overflow-hidden transform transition-all scale-95 duration-200" id="cashout_modal_box">
+        <div class="p-5 sm:p-6 bg-gradient-to-r from-emerald-600 to-teal-700 text-white flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-11 h-11 rounded-2xl bg-white/20 flex items-center justify-center text-xl flex-shrink-0 shadow-inner">
+                    <i class="fa-solid fa-hand-holding-dollar"></i>
+                </div>
+                <div>
+                    <h3 id="cashout_modal_title" class="font-black text-base sm:text-lg leading-tight">Confirm Susu Cashout & Settlement</h3>
+                    <p class="text-xs text-white/80 mt-0.5">Card #<?= $card['card_number'] ?> &bull; <?= htmlspecialchars($card['full_name']) ?></p>
+                </div>
+            </div>
+            <button type="button" onclick="closeCashoutModal()" class="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition cursor-pointer" title="Close modal" aria-label="Close modal">
+                <i class="fa-solid fa-xmark text-sm"></i>
+            </button>
+        </div>
+
+        <form method="POST" action="request_payout.php" class="p-5 sm:p-6 space-y-4">
+            <input type="hidden" name="card_id" value="<?= $cardId ?>">
+            <input type="hidden" name="reason" value="Card completed 31 spaces - Full cycle payout">
+
+            <!-- Itemized Breakdown Card (Financial Confidence & Transparency) -->
+            <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-5 space-y-2.5 text-xs sm:text-sm">
+                <div class="flex items-center justify-between text-slate-600">
+                    <span>Gross Savings (<?= $card['spaces_filled'] ?> of 31 spaces):</span>
+                    <strong class="text-slate-900 font-bold"><?= format_money($card['total_saved']) ?></strong>
+                </div>
+                <div class="flex items-center justify-between text-red-600 font-semibold">
+                    <span>Less: 1-Day Susu Management Fee:</span>
+                    <strong>- <?= format_money($payoutCalc['business_fee'] ?? $card['daily_amount']) ?></strong>
+                </div>
+                <?php if (!empty($card['change_balance']) && (float)$card['change_balance'] > 0): ?>
+                    <div class="flex items-center justify-between text-pumpkin_spice font-semibold">
+                        <span>Plus: Customer Float Refunded:</span>
+                        <strong>+ <?= format_money($card['change_balance']) ?></strong>
+                    </div>
+                <?php endif; ?>
+
+                <!-- Net Cashout Highlight Pill -->
+                <div class="pt-3 border-t-2 border-slate-200 flex items-center justify-between bg-emerald-50 -mx-4 sm:-mx-5 px-4 sm:px-5 py-3 rounded-b-xl mt-1 text-emerald-900">
+                    <div>
+                        <div class="text-[11px] uppercase tracking-wider font-extrabold text-emerald-700">Net Cash Disbursed to Client</div>
+                        <div class="text-xs text-emerald-800 font-medium">To be given physically or via MoMo</div>
+                    </div>
+                    <div class="text-xl sm:text-2xl font-black text-emerald-700">
+                        <?= format_money($payoutCalc['customer_payout'] ?? ($card['total_saved'] - $card['daily_amount'])) ?>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Reassurance / Warning Banner -->
+            <div class="p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-2.5 text-xs text-blue-900 font-medium">
+                <i class="fa-solid fa-circle-info text-steel_azure text-sm mt-0.5 flex-shrink-0"></i>
+                <span>Executing this cashout settles the card, records the 1-space fee retained by Eyram Susu, and archives all 31 spaces in the passbook history.</span>
+            </div>
+
+            <!-- Action CTAs (Hick's Law: 1 Primary + 1 Secondary) -->
+            <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
+                <button type="button" onclick="closeCashoutModal()" class="btn-touch px-4 py-2.5 bg-white hover:bg-slate-100 text-slate-600 border border-slate-300 text-xs font-bold rounded-xl transition cursor-pointer">
+                    Cancel
+                </button>
+                <button type="submit" class="btn-touch px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-black rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer">
+                    <i class="fa-solid fa-circle-check text-sm"></i>
+                    <span>Confirm & Disburse Cashout</span>
+                </button>
+            </div>
+        </form>
     </div>
 </div>
 
 <script>
+function openCashoutModal() {
+    const modal = document.getElementById('cashout_confirm_modal');
+    const box = document.getElementById('cashout_modal_box');
+    if (!modal) return;
+    if (modal.parentElement !== document.body) {
+        document.body.appendChild(modal);
+    }
+    modal.classList.remove('hidden');
+    setTimeout(() => {
+        box.classList.remove('scale-95');
+        box.classList.add('scale-100');
+    }, 10);
+}
+
+function closeCashoutModal() {
+    const modal = document.getElementById('cashout_confirm_modal');
+    const box = document.getElementById('cashout_modal_box');
+    if (!modal) return;
+    box.classList.remove('scale-100');
+    box.classList.add('scale-95');
+    setTimeout(() => {
+        modal.classList.add('hidden');
+    }, 150);
+}
+
 function openCancelDepositModal(depositId, customerName, amount, spaceNumber) {
     document.getElementById('cancel_deposit_id').value = depositId;
     document.getElementById('cancel_customer_name').textContent = customerName;
@@ -610,13 +845,20 @@ function selectCancelReason(reason, btn) {
 }
 
 document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') closeCancelDepositModal();
+    if (e.key === 'Escape') {
+        closeCancelDepositModal();
+        closeCashoutModal();
+    }
 });
 
 document.addEventListener('click', function(e) {
-    const modal = document.getElementById('cancel_deposit_modal');
-    if (modal && !modal.classList.contains('hidden') && e.target === modal) {
+    const cancelModal = document.getElementById('cancel_deposit_modal');
+    if (cancelModal && !cancelModal.classList.contains('hidden') && e.target === cancelModal) {
         closeCancelDepositModal();
+    }
+    const cashoutModal = document.getElementById('cashout_confirm_modal');
+    if (cashoutModal && !cashoutModal.classList.contains('hidden') && e.target === cashoutModal) {
+        closeCashoutModal();
     }
 });
 </script>

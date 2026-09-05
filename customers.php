@@ -167,9 +167,9 @@ if ($user['role'] === 'collector') {
 }
 
 if ($statusFilter === 'active') {
-    $whereClauses[] = "sc.id IS NOT NULL";
+    $whereClauses[] = "(act_sc.id IS NOT NULL OR comp_sc.id IS NOT NULL)";
 } elseif ($statusFilter === 'no_card') {
-    $whereClauses[] = "sc.id IS NULL";
+    $whereClauses[] = "(act_sc.id IS NULL AND comp_sc.id IS NULL)";
 }
 
 if ($searchQuery !== '') {
@@ -194,21 +194,83 @@ $whereSql = implode(" AND ", $whereClauses);
 
 $sql = "
     SELECT c.*, u.full_name as collector_name,
-           sc.id as card_id, sc.card_number, sc.daily_amount, sc.spaces_filled, sc.total_spaces, sc.total_saved, sc.status as card_status
+           act_sc.id as active_card_id,
+           act_sc.card_number as active_card_number,
+           act_sc.daily_amount as active_daily_amount,
+           act_sc.spaces_filled as active_spaces_filled,
+           act_sc.total_spaces as active_total_spaces,
+           act_sc.total_saved as active_total_saved,
+           act_sc.status as active_card_status,
+           comp_sc.id as completed_card_id,
+           comp_sc.card_number as completed_card_number,
+           comp_sc.daily_amount as completed_daily_amount,
+           comp_sc.spaces_filled as completed_spaces_filled,
+           comp_sc.total_spaces as completed_total_spaces,
+           comp_sc.total_saved as completed_total_saved,
+           comp_sc.status as completed_card_status,
+           comp_p.id as completed_payout_id,
+           comp_p.status as completed_payout_status,
+           latest_sc.id as latest_card_id,
+           latest_sc.card_number as latest_card_number,
+           (SELECT COUNT(*) FROM susu_cards WHERE customer_id = c.id) as total_cards_count
     FROM customers c
     LEFT JOIN users u ON c.assigned_collector_id = u.id
-    LEFT JOIN susu_cards sc ON sc.id = (
+    LEFT JOIN susu_cards act_sc ON act_sc.id = (
         SELECT id FROM susu_cards 
         WHERE customer_id = c.id AND status = 'active' 
-        ORDER BY spaces_filled DESC, id DESC 
-        LIMIT 1
+        ORDER BY id DESC LIMIT 1
+    )
+    LEFT JOIN susu_cards comp_sc ON comp_sc.id = (
+        SELECT sc2.id FROM susu_cards sc2
+        WHERE sc2.customer_id = c.id 
+          AND (sc2.status = 'completed' OR sc2.spaces_filled >= sc2.total_spaces)
+          AND NOT EXISTS (
+              SELECT 1 FROM payouts p_paid WHERE p_paid.card_id = sc2.id AND p_paid.status = 'paid'
+          )
+        ORDER BY sc2.id DESC LIMIT 1
+    )
+    LEFT JOIN payouts comp_p ON comp_p.card_id = comp_sc.id AND comp_p.status = 'pending'
+    LEFT JOIN susu_cards latest_sc ON latest_sc.id = (
+        SELECT id FROM susu_cards WHERE customer_id = c.id ORDER BY id DESC LIMIT 1
     )
     WHERE {$whereSql}
     ORDER BY c.full_name ASC
 ";
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
-$allCustomers = $stmt->fetchAll();
+$allCustomers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+foreach ($allCustomers as &$c) {
+    if (!empty($c['completed_card_id'])) {
+        $c['card_id'] = $c['completed_card_id'];
+        $c['card_number'] = $c['completed_card_number'];
+        $c['daily_amount'] = (float)$c['completed_daily_amount'];
+        $c['spaces_filled'] = (int)$c['completed_spaces_filled'];
+        $c['total_spaces'] = (int)$c['completed_total_spaces'];
+        $c['total_saved'] = (float)$c['completed_total_saved'];
+        $c['card_status'] = 'completed';
+        $c['is_completed_unpaid'] = true;
+    } elseif (!empty($c['active_card_id'])) {
+        $c['card_id'] = $c['active_card_id'];
+        $c['card_number'] = $c['active_card_number'];
+        $c['daily_amount'] = (float)$c['active_daily_amount'];
+        $c['spaces_filled'] = (int)$c['active_spaces_filled'];
+        $c['total_spaces'] = (int)$c['active_total_spaces'];
+        $c['total_saved'] = (float)$c['active_total_saved'];
+        $c['card_status'] = 'active';
+        $c['is_completed_unpaid'] = false;
+    } else {
+        $c['card_id'] = null;
+        $c['card_number'] = null;
+        $c['daily_amount'] = 20.00;
+        $c['spaces_filled'] = 0;
+        $c['total_spaces'] = 31;
+        $c['total_saved'] = 0.00;
+        $c['card_status'] = null;
+        $c['is_completed_unpaid'] = false;
+    }
+}
+unset($c);
 
 // Pagination setup
 $page = max(1, (int)($_GET['page'] ?? 1));
@@ -464,31 +526,52 @@ require_once __DIR__ . '/includes/header.php';
                                     </div>
                                     <div class="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5">
                                         <i class="fa-solid fa-location-dot text-slate-400 text-[11px]"></i>
-                                        <span><?= htmlspecialchars($c['location'] ?: 'Not specified') ?></span>
-                                    </div>
-                                </td>
-                                <td class="py-3 px-4 text-slate-700 font-medium">
+<td class="py-3 px-4 text-slate-700 font-medium">
                                     <?= htmlspecialchars($c['collector_name'] ?: 'Unassigned') ?>
                                 </td>
                                 <td class="py-3 px-4">
-                                    <?php if ($c['card_id']): ?>
+                                    <?php if ($c['card_id'] && $c['card_status'] === 'completed'): ?>
+                                        <div class="flex items-center gap-1.5 flex-wrap">
+                                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                                <i class="fa-solid fa-award text-[10px]"></i>
+                                                <span>31/31 Completed</span>
+                                            </span>
+                                            <span class="text-xs font-black text-emerald-950">
+                                                <?= format_money($c['total_saved']) ?>
+                                            </span>
+                                        </div>
+                                        <div class="text-[11px] font-bold mt-0.5 <?= !empty($c['completed_payout_id']) ? 'text-purple-700' : 'text-emerald-700' ?>">
+                                            <?= !empty($c['completed_payout_id']) ? '⏳ Payout Pending Approval' : '🎯 Ready for Cashout' ?>
+                                        </div>
+                                    <?php elseif ($c['card_id']): ?>
                                         <div class="font-bold text-steel_azure">
                                             <?= format_money($c['daily_amount']) ?> / space
                                         </div>
                                         <div class="text-[11px] text-emerald-600 font-semibold">
                                             <?= $c['spaces_filled'] ?> of <?= $c['total_spaces'] ?> spaces (<?= format_money($c['total_saved']) ?>)
                                         </div>
+                                    <?php elseif ((int)($c['total_cards_count'] ?? 0) > 0): ?>
+                                        <div class="flex items-center gap-1.5 flex-wrap">
+                                            <span class="text-xs text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+                                                Card Settled
+                                            </span>
+                                            <?php if ($user['role'] === 'admin'): ?>
+                                                <button type="button"
+                                                        onclick="openNewCardModal(<?= $c['id'] ?>, <?= htmlspecialchars(json_encode($c['full_name']), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars(json_encode($c['account_number']), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars(json_encode($c['collector_name'] ?: 'Unassigned'), ENT_QUOTES, 'UTF-8') ?>, 20.00)"
+                                                        class="px-2 py-0.5 bg-pumpkin_spice-900 hover:bg-pumpkin_spice text-pumpkin_spice hover:text-white border border-pumpkin_spice text-[10px] font-bold rounded-md transition cursor-pointer">
+                                                    + Next Card
+                                                </button>
+                                            <?php endif; ?>
+                                        </div>
                                     <?php else: ?>
                                         <div class="flex items-center gap-2">
-                                            <span class="text-xs text-amber-600 font-semibold">No active card</span>
+                                            <span class="text-xs text-amber-600 font-semibold">No card yet</span>
                                             <?php if ($user['role'] === 'admin'): ?>
-                                                <form method="POST" action="start_new_card.php" class="inline">
-                                                    <input type="hidden" name="customer_id" value="<?= $c['id'] ?>">
-                                                    <input type="hidden" name="daily_amount" value="<?= $c['daily_amount'] > 0 ? $c['daily_amount'] : 20.00 ?>">
-                                                    <button type="submit" class="px-2 py-0.5 bg-pumpkin_spice-900 hover:bg-pumpkin_spice text-pumpkin_spice hover:text-white border border-pumpkin_spice text-[10px] font-bold rounded-md transition cursor-pointer">
-                                                        + Open
-                                                    </button>
-                                                </form>
+                                                <button type="button"
+                                                        onclick="openNewCardModal(<?= $c['id'] ?>, <?= htmlspecialchars(json_encode($c['full_name']), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars(json_encode($c['account_number']), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars(json_encode($c['collector_name'] ?: 'Unassigned'), ENT_QUOTES, 'UTF-8') ?>, 20.00)"
+                                                        class="px-2 py-0.5 bg-pumpkin_spice-900 hover:bg-pumpkin_spice text-pumpkin_spice hover:text-white border border-pumpkin_spice text-[10px] font-bold rounded-md transition cursor-pointer">
+                                                    + Open
+                                                </button>
                                             <?php endif; ?>
                                         </div>
                                     <?php endif; ?>
@@ -500,7 +583,25 @@ require_once __DIR__ . '/includes/header.php';
                                 </td>
                                 <td class="py-3 px-4 text-right">
                                     <div class="flex items-center justify-end gap-1.5">
-                                        <?php if ($c['card_id']): ?>
+                                        <?php if ($c['card_id'] && $c['card_status'] === 'completed'): ?>
+                                            <!-- Completed Card Actions (Hick's Law: Clear Primary CTA) -->
+                                            <?php if ($user['role'] === 'admin'): ?>
+                                                <a href="request_payout.php?card_id=<?= $c['card_id'] ?>" class="btn-touch px-3 py-1.5 bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-black rounded-xl shadow-2xs transition inline-flex items-center gap-1.5">
+                                                    <i class="fa-solid fa-hand-holding-dollar text-xs"></i>
+                                                    <span>Cash Out</span>
+                                                </a>
+                                            <?php else: ?>
+                                                <a href="request_payout.php?card_id=<?= $c['card_id'] ?>" class="btn-touch px-3 py-1.5 bg-steel_azure hover:bg-steel_azure-400 text-white text-xs font-black rounded-xl shadow-2xs transition inline-flex items-center gap-1.5">
+                                                    <i class="fa-solid fa-paper-plane text-xs"></i>
+                                                    <span>Request Payout</span>
+                                                </a>
+                                            <?php endif; ?>
+                                            <a href="view_card.php?id=<?= $c['card_id'] ?>" class="btn-touch px-3 py-1.5 bg-white hover:bg-platinum text-steel_azure border border-steel_azure text-xs font-bold rounded-xl transition inline-flex items-center gap-1.5" title="View Passbook & All Spaces">
+                                                <i class="fa-solid fa-id-card text-xs"></i>
+                                                <span>Card</span>
+                                            </a>
+                                        <?php elseif ($c['card_id']): ?>
+                                            <!-- Active Card Actions -->
                                             <a href="record_deposit.php?customer_id=<?= $c['id'] ?>" class="btn-touch px-3 py-1.5 bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-bold rounded-xl shadow-2xs transition inline-flex items-center gap-1.5">
                                                 <i class="fa-solid fa-plus text-xs"></i>
                                                 <span>Deposit</span>
@@ -509,13 +610,22 @@ require_once __DIR__ . '/includes/header.php';
                                                 <i class="fa-solid fa-id-card text-xs"></i>
                                                 <span>Card</span>
                                             </a>
-                                        <?php elseif ($user['role'] === 'admin'): ?>
-                                            <button type="button"
-                                                    onclick="openNewCardModal(<?= $c['id'] ?>, <?= htmlspecialchars(json_encode($c['full_name']), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars(json_encode($c['account_number']), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars(json_encode($c['collector_name'] ?: 'Unassigned'), ENT_QUOTES, 'UTF-8') ?>, <?= (float)($c['daily_amount'] > 0 ? $c['daily_amount'] : 20.00) ?>)"
-                                                    class="btn-touch px-3 py-1.5 bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold rounded-xl shadow-2xs transition inline-flex items-center gap-1.5 cursor-pointer">
-                                                <i class="fa-solid fa-circle-plus text-xs"></i>
-                                                <span>+ Open Card</span>
-                                            </button>
+                                        <?php else: ?>
+                                            <!-- No Active Card -->
+                                            <?php if (!empty($c['latest_card_id'])): ?>
+                                                <a href="view_card.php?id=<?= $c['latest_card_id'] ?>" class="btn-touch px-3 py-1.5 bg-white hover:bg-platinum text-steel_azure border border-steel_azure text-xs font-bold rounded-xl transition inline-flex items-center gap-1.5" title="View Card History">
+                                                    <i class="fa-solid fa-clock-rotate-left text-xs"></i>
+                                                    <span>History</span>
+                                                </a>
+                                            <?php endif; ?>
+                                            <?php if ($user['role'] === 'admin'): ?>
+                                                <button type="button"
+                                                        onclick="openNewCardModal(<?= $c['id'] ?>, <?= htmlspecialchars(json_encode($c['full_name']), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars(json_encode($c['account_number']), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars(json_encode($c['collector_name'] ?: 'Unassigned'), ENT_QUOTES, 'UTF-8') ?>, 20.00)"
+                                                        class="btn-touch px-3 py-1.5 bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold rounded-xl shadow-2xs transition inline-flex items-center gap-1.5 cursor-pointer">
+                                                    <i class="fa-solid fa-circle-plus text-xs"></i>
+                                                    <span>+ Open Card</span>
+                                                </button>
+                                            <?php endif; ?>
                                         <?php endif; ?>
 
                                         <?php if ($user['role'] === 'admin'): ?>
@@ -536,7 +646,7 @@ require_once __DIR__ . '/includes/header.php';
                                                         'total_spaces' => $c['total_spaces'],
                                                         'total_saved' => $c['total_saved']
                                                     ]), ENT_QUOTES, 'UTF-8') ?>)'
-                                                    class="btn-touch px-2.5 py-1.5 bg-blue-50 hover:bg-steel_azure hover:text-white text-steel_azure border border-blue-200 text-xs font-bold rounded-xl transition inline-flex items-center gap-1.5"
+                                                    class="btn-touch px-2.5 py-1.5 bg-blue-50 hover:bg-steel_azure hover:text-white text-steel_azure border border-blue-200 text-xs font-bold rounded-xl transition inline-flex items-center justify-center gap-1.5"
                                                     title="Edit Customer & Plan">
                                                 <i class="fa-solid fa-pen-to-square text-xs"></i>
                                                 <span>Edit</span>
@@ -568,14 +678,23 @@ require_once __DIR__ . '/includes/header.php';
                             </div>
                             <div class="text-[11px] text-slate-500 font-mono"><?= htmlspecialchars($c['account_number']) ?> &bull; <?= htmlspecialchars($c['phone'] ?: 'No phone') ?></div>
                         </div>
-                        <?php if ($c['card_id']): ?>
+                        <?php if ($c['card_id'] && $c['card_status'] === 'completed'): ?>
+                            <span class="text-xs font-black text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-lg border border-emerald-300">
+                                31/31 Completed
+                            </span>
+                        <?php elseif ($c['card_id']): ?>
                             <span class="text-xs font-bold text-steel_azure bg-platinum px-2 py-0.5 rounded border border-silver-600">
                                 <?= format_money($c['daily_amount']) ?>
                             </span>
                         <?php endif; ?>
                     </div>
 
-                    <?php if ($c['card_id']): ?>
+                    <?php if ($c['card_id'] && $c['card_status'] === 'completed'): ?>
+                        <div class="mt-2 text-xs text-slate-600 flex items-center justify-between">
+                            <div>Total Saved: <strong class="text-emerald-700 font-black"><?= format_money($c['total_saved']) ?></strong></div>
+                            <span class="text-[11px] font-bold text-emerald-700"><?= !empty($c['completed_payout_id']) ? '⏳ Pending' : '🎯 Ready for Cashout' ?></span>
+                        </div>
+                    <?php elseif ($c['card_id']): ?>
                         <div class="mt-2 text-xs text-slate-600">
                             Saved: <strong class="text-emerald-700"><?= format_money($c['total_saved']) ?></strong> (<?= $c['spaces_filled'] ?>/<?= $c['total_spaces'] ?> spaces)
                             <?php if ($c['change_balance'] > 0): ?>
@@ -585,7 +704,25 @@ require_once __DIR__ . '/includes/header.php';
                     <?php endif; ?>
 
                     <div class="mt-3 flex items-center gap-2 pt-2 border-t border-silver-600/60">
-                        <?php if ($c['card_id']): ?>
+                        <?php if ($c['card_id'] && $c['card_status'] === 'completed'): ?>
+                            <!-- Completed Card Mobile Actions -->
+                            <?php if ($user['role'] === 'admin'): ?>
+                                <a href="request_payout.php?card_id=<?= $c['card_id'] ?>" class="flex-1 btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-black py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-2xs">
+                                    <i class="fa-solid fa-hand-holding-dollar text-xs"></i>
+                                    <span>Cash Out</span>
+                                </a>
+                            <?php else: ?>
+                                <a href="request_payout.php?card_id=<?= $c['card_id'] ?>" class="flex-1 btn-touch bg-steel_azure hover:bg-steel_azure-400 text-white text-xs font-black py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-2xs">
+                                    <i class="fa-solid fa-paper-plane text-xs"></i>
+                                    <span>Request Payout</span>
+                                </a>
+                            <?php endif; ?>
+                            <a href="view_card.php?id=<?= $c['card_id'] ?>" class="btn-touch px-3 bg-white hover:bg-platinum text-steel_azure border border-steel_azure text-xs font-bold py-2 rounded-xl flex items-center justify-center gap-1.5">
+                                <i class="fa-solid fa-id-card text-xs"></i>
+                                <span>Card</span>
+                            </a>
+                        <?php elseif ($c['card_id']): ?>
+                            <!-- Active Card Mobile Actions -->
                             <a href="record_deposit.php?customer_id=<?= $c['id'] ?>" class="flex-1 btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-bold py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-2xs">
                                 <i class="fa-solid fa-plus text-xs"></i>
                                 <span>Deposit</span>
@@ -594,13 +731,22 @@ require_once __DIR__ . '/includes/header.php';
                                 <i class="fa-solid fa-id-card text-xs"></i>
                                 <span>Card</span>
                             </a>
-                        <?php elseif ($user['role'] === 'admin'): ?>
-                            <button type="button"
-                                    onclick="openNewCardModal(<?= $c['id'] ?>, <?= htmlspecialchars(json_encode($c['full_name']), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars(json_encode($c['account_number']), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars(json_encode($c['collector_name'] ?: 'Unassigned'), ENT_QUOTES, 'UTF-8') ?>, <?= (float)($c['daily_amount'] > 0 ? $c['daily_amount'] : 20.00) ?>)"
-                                    class="flex-1 w-full btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer">
-                                <i class="fa-solid fa-circle-plus text-xs"></i>
-                                <span>+ Open Susu Card</span>
-                            </button>
+                        <?php else: ?>
+                            <!-- No Active Card Mobile Actions -->
+                            <?php if (!empty($c['latest_card_id'])): ?>
+                                <a href="view_card.php?id=<?= $c['latest_card_id'] ?>" class="btn-touch px-3 bg-white hover:bg-platinum text-steel_azure border border-steel_azure text-xs font-bold py-2 rounded-xl flex items-center justify-center gap-1.5">
+                                    <i class="fa-solid fa-clock-rotate-left text-xs"></i>
+                                    <span>History</span>
+                                </a>
+                            <?php endif; ?>
+                            <?php if ($user['role'] === 'admin'): ?>
+                                <button type="button"
+                                        onclick="openNewCardModal(<?= $c['id'] ?>, <?= htmlspecialchars(json_encode($c['full_name']), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars(json_encode($c['account_number']), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars(json_encode($c['collector_name'] ?: 'Unassigned'), ENT_QUOTES, 'UTF-8') ?>, <?= (float)($c['daily_amount'] > 0 ? $c['daily_amount'] : 20.00) ?>)"
+                                        class="flex-1 w-full btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer">
+                                    <i class="fa-solid fa-circle-plus text-xs"></i>
+                                    <span>+ Open Card</span>
+                                </button>
+                            <?php endif; ?>
                         <?php endif; ?>
 
                         <?php if ($user['role'] === 'admin'): ?>
