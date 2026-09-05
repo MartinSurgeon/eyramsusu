@@ -1045,6 +1045,34 @@ textarea:focus-visible {
 }
 
 /* ============================================================
+   KPI TOOLTIP POPOVERS (Desktop Hover & Mobile Tap)
+   ============================================================ */
+.kpi-tip-popover {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), 
+                visibility 0.2s;
+}
+
+/* Desktop Hover & Focus-within */
+@media (hover: hover) and (pointer: fine) {
+    .group\/tip:hover .kpi-tip-popover,
+    .group\/tip:focus-within .kpi-tip-popover {
+        opacity: 1 !important;
+        visibility: visible !important;
+        pointer-events: auto !important;
+    }
+}
+
+/* Mobile Tap & Active Toggle State */
+.kpi-tip-popover.is-open {
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+}
+
+/* ============================================================
    PRINT OPTIMIZATION
    ============================================================ */
 @media print {

@@ -122,41 +122,189 @@ require_once __DIR__ . '/includes/header.php';
     <!-- Financial KPIs for the selected date (Serial position: dominant metrics first & last) -->
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         
-        <div class="kpi-card">
-            <div class="kpi-icon bg-emerald-50 text-emerald-600"><i class="fa-solid fa-sack-dollar"></i></div>
-            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mt-2">Total Cash Collected</span>
+        <!-- KPI 1: Money In -->
+        <div class="kpi-card relative group/kpi">
+            <div class="flex items-center justify-between">
+                <div class="kpi-icon bg-emerald-50 text-emerald-600 mb-0"><i class="fa-solid fa-arrow-down text-xs"></i></div>
+                <div class="relative group/tip">
+                    <button type="button" 
+                            class="kpi-tip-btn btn-touch w-7 h-7 -mr-1 rounded-full text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 flex items-center justify-center transition cursor-pointer"
+                            onclick="toggleKpiTip(this, event)"
+                            title="Click or tap for explanation"
+                            aria-label="Explanation of Money In"
+                            aria-expanded="false"
+                            aria-haspopup="dialog">
+                        <i class="fa-solid fa-circle-info text-xs"></i>
+                    </button>
+                    <!-- Floating Tooltip Popover -->
+                    <div class="kpi-tip-popover absolute left-[-10px] sm:left-0 lg:left-0 bottom-full mb-2.5 w-64 max-w-[calc(100vw-2.5rem)] p-3.5 bg-slate-900/95 backdrop-blur-md text-white rounded-xl shadow-2xl z-50 text-left border border-slate-700/80">
+                        <div class="flex items-center justify-between gap-2 mb-1.5">
+                            <div class="flex items-center gap-1.5 font-bold text-xs text-white">
+                                <i class="fa-solid fa-sack-dollar text-emerald-400 text-xs"></i>
+                                <span>Fresh Money Collected</span>
+                            </div>
+                            <button type="button" 
+                                    class="sm:hidden text-slate-400 hover:text-white p-1 -mr-1 -mt-1 rounded-md transition cursor-pointer" 
+                                    onclick="closeAllKpiTips(event)" 
+                                    aria-label="Close tooltip">
+                                <i class="fa-solid fa-xmark text-xs"></i>
+                            </button>
+                        </div>
+                        <p class="text-[11px] text-slate-300 leading-normal">
+                            All physical cash paid by customers on this date across every space stamped. This cash goes directly into the cash drawer.
+                        </p>
+                        <div class="mt-2 pt-1.5 border-t border-slate-700/80 text-[10px] text-emerald-300 font-mono flex items-center gap-1">
+                            <i class="fa-solid fa-calculator text-[9px]"></i>
+                            <span>Sum of all space deposits today</span>
+                        </div>
+                        <div class="kpi-tip-arrow absolute top-full left-5 sm:left-5 -mt-1 border-4 border-transparent border-t-slate-900/95"></div>
+                    </div>
+                </div>
+            </div>
+            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mt-2">Money In (Collected)</span>
             <div class="text-xl sm:text-2xl font-black text-emerald-600 mt-1">
                 <?= format_money($totalCollected) ?>
             </div>
-            <span class="text-[11px] text-slate-500 mt-1"><?= count($allDeposits) ?> individual spaces stamped</span>
+            <span class="text-[11px] text-slate-500 mt-1"><?= count($allDeposits) ?> spaces stamped today</span>
         </div>
 
-        <div class="kpi-card">
-            <div class="kpi-icon bg-orange-50 text-pumpkin_spice"><i class="fa-solid fa-file-invoice-dollar"></i></div>
-            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mt-2">Business Fees Earned</span>
+        <!-- KPI 2: Our Profit -->
+        <div class="kpi-card relative group/kpi">
+            <div class="flex items-center justify-between">
+                <div class="kpi-icon bg-orange-50 text-pumpkin_spice mb-0"><i class="fa-solid fa-coins text-xs"></i></div>
+                <div class="relative group/tip">
+                    <button type="button" 
+                            class="kpi-tip-btn btn-touch w-7 h-7 -mr-1 rounded-full text-slate-400 hover:text-pumpkin_spice hover:bg-orange-50 focus:outline-none focus:ring-2 focus:ring-pumpkin_spice/40 flex items-center justify-center transition cursor-pointer"
+                            onclick="toggleKpiTip(this, event)"
+                            title="Click or tap for explanation"
+                            aria-label="Explanation of Our Profit"
+                            aria-expanded="false"
+                            aria-haspopup="dialog">
+                        <i class="fa-solid fa-circle-info text-xs"></i>
+                    </button>
+                    <!-- Floating Tooltip Popover -->
+                    <div class="kpi-tip-popover absolute right-[-10px] sm:right-0 lg:left-1/2 lg:-translate-x-1/2 bottom-full mb-2.5 w-64 max-w-[calc(100vw-2.5rem)] p-3.5 bg-slate-900/95 backdrop-blur-md text-white rounded-xl shadow-2xl z-50 text-left border border-slate-700/80">
+                        <div class="flex items-center justify-between gap-2 mb-1.5">
+                            <div class="flex items-center gap-1.5 font-bold text-xs text-white">
+                                <i class="fa-solid fa-hand-holding-dollar text-amber-400 text-xs"></i>
+                                <span>Company Commission</span>
+                            </div>
+                            <button type="button" 
+                                    class="sm:hidden text-slate-400 hover:text-white p-1 -mr-1 -mt-1 rounded-md transition cursor-pointer" 
+                                    onclick="closeAllKpiTips(event)" 
+                                    aria-label="Close tooltip">
+                                <i class="fa-solid fa-xmark text-xs"></i>
+                            </button>
+                        </div>
+                        <p class="text-[11px] text-slate-300 leading-normal">
+                            The 1-day fee kept by the company for managing the Susu. It officially moves into profit when a completed card is cashed out.
+                        </p>
+                        <div class="mt-2 pt-1.5 border-t border-slate-700/80 text-[10px] text-amber-300 font-mono flex items-center gap-1">
+                            <i class="fa-solid fa-calculator text-[9px]"></i>
+                            <span>1 daily fee per completed card</span>
+                        </div>
+                        <div class="kpi-tip-arrow absolute top-full right-5 sm:right-5 lg:left-1/2 lg:-translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-900/95"></div>
+                    </div>
+                </div>
+            </div>
+            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mt-2">Our Profit (Commission)</span>
             <div class="text-xl sm:text-2xl font-black text-pumpkin_spice mt-1">
                 <?= format_money($payoutStats['total_fees']) ?>
             </div>
-            <span class="text-[11px] text-slate-500 mt-1">1-space fee from closed cards</span>
+            <span class="text-[11px] text-slate-500 mt-1">1-day fee kept when cards complete</span>
         </div>
 
-        <div class="kpi-card">
-            <div class="kpi-icon bg-blue-50 text-steel_azure"><i class="fa-solid fa-hand-holding-dollar"></i></div>
-            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mt-2">Payouts Disbursed</span>
+        <!-- KPI 3: Money Out -->
+        <div class="kpi-card relative group/kpi">
+            <div class="flex items-center justify-between">
+                <div class="kpi-icon bg-blue-50 text-steel_azure mb-0"><i class="fa-solid fa-arrow-up text-xs"></i></div>
+                <div class="relative group/tip">
+                    <button type="button" 
+                            class="kpi-tip-btn btn-touch w-7 h-7 -mr-1 rounded-full text-slate-400 hover:text-steel_azure hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-steel_azure/40 flex items-center justify-center transition cursor-pointer"
+                            onclick="toggleKpiTip(this, event)"
+                            title="Click or tap for explanation"
+                            aria-label="Explanation of Money Out"
+                            aria-expanded="false"
+                            aria-haspopup="dialog">
+                        <i class="fa-solid fa-circle-info text-xs"></i>
+                    </button>
+                    <!-- Floating Tooltip Popover -->
+                    <div class="kpi-tip-popover absolute left-[-10px] sm:left-0 lg:left-1/2 lg:-translate-x-1/2 bottom-full mb-2.5 w-64 max-w-[calc(100vw-2.5rem)] p-3.5 bg-slate-900/95 backdrop-blur-md text-white rounded-xl shadow-2xl z-50 text-left border border-slate-700/80">
+                        <div class="flex items-center justify-between gap-2 mb-1.5">
+                            <div class="flex items-center gap-1.5 font-bold text-xs text-white">
+                                <i class="fa-solid fa-money-bill-transfer text-blue-400 text-xs"></i>
+                                <span>Paid to Customers</span>
+                            </div>
+                            <button type="button" 
+                                    class="sm:hidden text-slate-400 hover:text-white p-1 -mr-1 -mt-1 rounded-md transition cursor-pointer" 
+                                    onclick="closeAllKpiTips(event)" 
+                                    aria-label="Close tooltip">
+                                <i class="fa-solid fa-xmark text-xs"></i>
+                            </button>
+                        </div>
+                        <p class="text-[11px] text-slate-300 leading-normal">
+                            Actual cash handed back to clients who finished their 31 spaces today. This money leaves the cash drawer.
+                        </p>
+                        <div class="mt-2 pt-1.5 border-t border-slate-700/80 text-[10px] text-blue-300 font-mono flex items-center gap-1">
+                            <i class="fa-solid fa-calculator text-[9px]"></i>
+                            <span>Sum of payouts cashed out today</span>
+                        </div>
+                        <div class="kpi-tip-arrow absolute top-full left-5 sm:left-5 lg:left-1/2 lg:-translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-900/95"></div>
+                    </div>
+                </div>
+            </div>
+            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mt-2">Money Out (Paid to Clients)</span>
             <div class="text-xl sm:text-2xl font-black text-steel_azure mt-1">
                 <?= format_money($payoutStats['total_payouts']) ?>
             </div>
-            <span class="text-[11px] text-slate-500 mt-1">Paid out to clients today</span>
+            <span class="text-[11px] text-slate-500 mt-1">Cash given back to customers today</span>
         </div>
 
-        <div class="kpi-card">
-            <div class="kpi-icon bg-slate-100 text-slate-700"><i class="fa-solid fa-scale-balanced"></i></div>
-            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mt-2">Net Cash Position</span>
+        <!-- KPI 4: Cash Left with Us Today -->
+        <div class="kpi-card relative group/kpi">
+            <div class="flex items-center justify-between">
+                <div class="kpi-icon bg-slate-100 text-slate-700 mb-0"><i class="fa-solid fa-wallet text-xs"></i></div>
+                <div class="relative group/tip">
+                    <button type="button" 
+                            class="kpi-tip-btn btn-touch w-7 h-7 -mr-1 rounded-full text-slate-400 hover:text-slate-800 hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-500/40 flex items-center justify-center transition cursor-pointer"
+                            onclick="toggleKpiTip(this, event)"
+                            title="Click or tap for explanation"
+                            aria-label="Explanation of Cash Left with Us"
+                            aria-expanded="false"
+                            aria-haspopup="dialog">
+                        <i class="fa-solid fa-circle-info text-xs"></i>
+                    </button>
+                    <!-- Floating Tooltip Popover -->
+                    <div class="kpi-tip-popover absolute right-[-10px] sm:right-0 lg:right-0 bottom-full mb-2.5 w-64 max-w-[calc(100vw-2.5rem)] p-3.5 bg-slate-900/95 backdrop-blur-md text-white rounded-xl shadow-2xl z-50 text-left border border-slate-700/80">
+                        <div class="flex items-center justify-between gap-2 mb-1.5">
+                            <div class="flex items-center gap-1.5 font-bold text-xs text-white">
+                                <i class="fa-solid fa-vault text-emerald-400 text-xs"></i>
+                                <span>Today's Cash in Drawer</span>
+                            </div>
+                            <button type="button" 
+                                    class="sm:hidden text-slate-400 hover:text-white p-1 -mr-1 -mt-1 rounded-md transition cursor-pointer" 
+                                    onclick="closeAllKpiTips(event)" 
+                                    aria-label="Close tooltip">
+                                <i class="fa-solid fa-xmark text-xs"></i>
+                            </button>
+                        </div>
+                        <p class="text-[11px] text-slate-300 leading-normal">
+                            How much physical money should remain in our cash drawer right now from today's transactions.
+                        </p>
+                        <div class="mt-2 pt-1.5 border-t border-slate-700/80 text-[10px] text-emerald-300 font-mono flex items-center gap-1">
+                            <i class="fa-solid fa-calculator text-[9px]"></i>
+                            <span>Money In minus Money Out</span>
+                        </div>
+                        <div class="kpi-tip-arrow absolute top-full right-5 sm:right-5 lg:right-5 -mt-1 border-4 border-transparent border-t-slate-900/95"></div>
+                    </div>
+                </div>
+            </div>
+            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mt-2">Cash Left with Us Today</span>
             <?php $netCash = $totalCollected - (float)$payoutStats['total_payouts']; ?>
             <div class="text-xl sm:text-2xl font-black <?= $netCash >= 0 ? 'text-emerald-700' : 'text-red-600' ?> mt-1">
                 <?= format_money($netCash) ?>
             </div>
-            <span class="text-[11px] text-slate-500 mt-1">Collections minus Payouts</span>
+            <span class="text-[11px] text-slate-500 mt-1">Money In minus Money Out</span>
         </div>
 
     </div>
@@ -243,5 +391,104 @@ require_once __DIR__ . '/includes/header.php';
     </div>
 
 </div>
+
+<script>
+/**
+ * KPI Tooltip Controller
+ * Combines desktop hover/focus states with mobile tap-toggle and smart viewport boundary clamping.
+ */
+function toggleKpiTip(btn, event) {
+    if (event) {
+        event.stopPropagation();
+    }
+    
+    const container = btn.closest('.group\\/tip');
+    if (!container) return;
+    const popover = container.querySelector('.kpi-tip-popover');
+    if (!popover) return;
+    
+    const isCurrentlyOpen = popover.classList.contains('is-open');
+    
+    // Close any other open tooltip first
+    closeAllKpiTips();
+    
+    if (!isCurrentlyOpen) {
+        popover.classList.add('is-open');
+        btn.setAttribute('aria-expanded', 'true');
+        clampPopoverToViewport(popover);
+    }
+}
+
+function closeAllKpiTips(event) {
+    if (event) {
+        event.stopPropagation();
+    }
+    document.querySelectorAll('.kpi-tip-popover.is-open').forEach(pop => {
+        pop.classList.remove('is-open');
+        pop.style.marginLeft = '';
+        pop.style.marginRight = '';
+    });
+    document.querySelectorAll('.kpi-tip-btn').forEach(btn => {
+        btn.setAttribute('aria-expanded', 'false');
+    });
+}
+
+function clampPopoverToViewport(popover) {
+    if (!popover) return;
+    popover.style.marginLeft = '';
+    popover.style.marginRight = '';
+    
+    const rect = popover.getBoundingClientRect();
+    const pad = 12;
+    const vw = document.documentElement.clientWidth || window.innerWidth;
+    
+    if (rect.left < pad) {
+        popover.style.marginLeft = (pad - rect.left) + 'px';
+    } else if (rect.right > vw - pad) {
+        popover.style.marginRight = (rect.right - (vw - pad)) + 'px';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Dismiss when tapping/clicking outside any tooltip
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.group\\/tip') && !e.target.closest('.kpi-tip-popover')) {
+            closeAllKpiTips();
+        }
+    });
+
+    // Dismiss when pressing Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeAllKpiTips();
+        }
+    });
+
+    // Desktop hover boundary protection
+    document.querySelectorAll('.group\\/tip').forEach(container => {
+        container.addEventListener('mouseenter', () => {
+            const popover = container.querySelector('.kpi-tip-popover');
+            if (popover && !popover.classList.contains('is-open')) {
+                clampPopoverToViewport(popover);
+            }
+        });
+        container.addEventListener('mouseleave', () => {
+            const popover = container.querySelector('.kpi-tip-popover');
+            if (popover && !popover.classList.contains('is-open')) {
+                popover.style.marginLeft = '';
+                popover.style.marginRight = '';
+            }
+        });
+    });
+
+    // Re-clamp on window resize or device rotation
+    window.addEventListener('resize', () => {
+        const openTip = document.querySelector('.kpi-tip-popover.is-open');
+        if (openTip) {
+            clampPopoverToViewport(openTip);
+        }
+    });
+});
+</script>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

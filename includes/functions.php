@@ -423,13 +423,21 @@ function get_card_deposits($card_id) {
 function get_admin_dashboard_stats() {
     $pdo = get_db_connection();
 
-    // Today's total collections
-    $stmt1 = $pdo->query("SELECT COALESCE(SUM(amount), 0.00) FROM deposits WHERE deposit_date = CURRENT_DATE");
-    $today_collections = (float)$stmt1->fetchColumn();
+    // Today's total collections & stamped spaces
+    $stmt1 = $pdo->query("SELECT COALESCE(SUM(amount), 0.00), COUNT(*) FROM deposits WHERE deposit_date = CURRENT_DATE");
+    $todayRow = $stmt1->fetch(PDO::FETCH_NUM);
+    $today_collections = (float)($todayRow[0] ?? 0);
+    $today_spaces_count = (int)($todayRow[1] ?? 0);
 
-    // Total active cards
-    $stmt2 = $pdo->query("SELECT COUNT(*) FROM susu_cards WHERE status = 'active'");
-    $active_cards = (int)$stmt2->fetchColumn();
+    // Live unsettled cash in collectors' hands (Field Cash)
+    $stmtField = $pdo->query("SELECT COALESCE(SUM(amount), 0.00) FROM deposits WHERE handover_id IS NULL");
+    $cash_in_field = (float)$stmtField->fetchColumn();
+
+    // Total active cards & ongoing customer savings
+    $stmt2 = $pdo->query("SELECT COUNT(*), COALESCE(SUM(total_saved), 0.00) FROM susu_cards WHERE status = 'active'");
+    $cardRow = $stmt2->fetch(PDO::FETCH_NUM);
+    $active_cards = (int)($cardRow[0] ?? 0);
+    $total_saved_active = (float)($cardRow[1] ?? 0);
 
     // Pending payout requests
     $stmt3 = $pdo->query("SELECT COUNT(*) FROM payouts WHERE status = 'pending'");
@@ -438,6 +446,10 @@ function get_admin_dashboard_stats() {
     // Pending daily cash handovers
     $stmt4 = $pdo->query("SELECT COUNT(*) FROM daily_handovers WHERE status = 'submitted'");
     $pending_handovers = (int)$stmt4->fetchColumn();
+
+    // Completed cards ready for cashout
+    $stmtCompleted = $pdo->query("SELECT COUNT(*) FROM susu_cards WHERE status = 'completed' AND id NOT IN (SELECT card_id FROM payouts)");
+    $completed_ready_cashout = (int)$stmtCompleted->fetchColumn();
 
     // Total lifetime business fees earned
     $stmt5 = $pdo->query("SELECT COALESCE(SUM(business_fee), 0.00) FROM payouts WHERE status IN ('approved', 'paid')");
@@ -448,12 +460,16 @@ function get_admin_dashboard_stats() {
     $total_customers = (int)$stmt6->fetchColumn();
 
     return [
-        'today_collections' => $today_collections,
-        'active_cards' => $active_cards,
-        'pending_payouts' => $pending_payouts,
-        'pending_handovers' => $pending_handovers,
-        'total_business_fees' => $total_business_fees,
-        'total_customers' => $total_customers
+        'today_collections'       => $today_collections,
+        'today_spaces_count'      => $today_spaces_count,
+        'cash_in_field'           => $cash_in_field,
+        'active_cards'            => $active_cards,
+        'total_saved_active'      => $total_saved_active,
+        'pending_payouts'         => $pending_payouts,
+        'pending_handovers'       => $pending_handovers,
+        'completed_ready_cashout' => $completed_ready_cashout,
+        'total_business_fees'     => $total_business_fees,
+        'total_customers'         => $total_customers
     ];
 }
 

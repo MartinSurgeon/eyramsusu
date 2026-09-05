@@ -60,97 +60,111 @@ require_once __DIR__ . '/includes/header.php';
         </div>
     </div>
 
-    <!-- Key Metrics Cards (Serial Position Effect: Action items first & last) -->
+    <!-- Key Metrics Cards (HCI Hierarchy: Dominant Inflow & Field Cash First, Portfolio & Action Queues Follow) -->
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         
-        <!-- 1st: Pending Payouts (Requires Attention - Serial Position: First) -->
-        <div class="kpi-card flex flex-col justify-between">
-            <div>
-                <div class="flex items-center justify-between">
-                    <div class="kpi-icon bg-orange-50 text-pumpkin_spice">
-                        <i class="fa-solid fa-hourglass-half"></i>
-                    </div>
-                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full <?= $stats['pending_payouts'] > 0 ? 'bg-orange-100 text-pumpkin_spice' : 'bg-slate-100 text-slate-500' ?>">
-                        <?= $stats['pending_payouts'] > 0 ? 'Action Needed' : 'All Clear' ?>
-                    </span>
-                </div>
-                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mt-2">Pending Payouts</span>
-                <div class="mt-1 text-xl sm:text-2xl font-extrabold <?= $stats['pending_payouts'] > 0 ? 'text-pumpkin_spice' : 'text-slate-700' ?>">
-                    <?= $stats['pending_payouts'] ?>
-                </div>
-            </div>
-            <a href="payouts.php" class="btn-touch mt-3 w-full py-2 px-3 rounded-xl text-xs font-bold bg-orange-50 text-pumpkin_spice hover:bg-pumpkin_spice hover:text-white border border-orange-200 transition shadow-xs flex items-center justify-center gap-1.5">
-                <span>Review Payouts</span>
-                <i class="fa-solid fa-arrow-right text-[10px]"></i>
-            </a>
-        </div>
-
-        <!-- 2nd: Pending Handovers (Requires Attention) -->
-        <div class="kpi-card flex flex-col justify-between">
-            <div>
-                <div class="flex items-center justify-between">
-                    <div class="kpi-icon bg-amber-50 text-amber-600">
-                        <i class="fa-solid fa-box-archive"></i>
-                    </div>
-                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full <?= $stats['pending_handovers'] > 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500' ?>">
-                        <?= $stats['pending_handovers'] > 0 ? 'Awaiting Cash' : 'Settled' ?>
-                    </span>
-                </div>
-                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mt-2">Handovers Awaiting</span>
-                <div class="mt-1 text-xl sm:text-2xl font-extrabold <?= $stats['pending_handovers'] > 0 ? 'text-pumpkin_spice' : 'text-slate-700' ?>">
-                    <?= $stats['pending_handovers'] ?>
-                </div>
-            </div>
-            <a href="daily_handover.php" class="btn-touch mt-3 w-full py-2 px-3 rounded-xl text-xs font-bold bg-amber-50 text-amber-700 hover:bg-amber-600 hover:text-white border border-amber-200 transition shadow-xs flex items-center justify-center gap-1.5">
-                <span>Confirm Handovers</span>
-                <i class="fa-solid fa-arrow-right text-[10px]"></i>
-            </a>
-        </div>
-
-        <!-- 3rd: Today's Collections -->
-        <div class="kpi-card flex flex-col justify-between">
+        <!-- Card 1: Money Collected Today (Dominant Financial Pulse - Serial Position: 1st) -->
+        <div class="kpi-card flex flex-col justify-between bg-white hover:border-emerald-300 transition-all duration-200">
             <div>
                 <div class="flex items-center justify-between">
                     <div class="kpi-icon bg-emerald-50 text-emerald-600">
                         <i class="fa-solid fa-sack-dollar"></i>
                     </div>
-                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Today</span>
+                    <span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/80">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span>Today</span>
+                    </span>
                 </div>
-                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mt-2">Collected Today</span>
-                <div class="mt-1 text-xl sm:text-2xl font-extrabold text-emerald-600">
+                <span class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider block mt-2">Collected Today</span>
+                <div class="mt-1 text-xl sm:text-2xl font-black text-emerald-600">
                     <?= format_money($stats['today_collections']) ?>
                 </div>
+                <p class="text-[11px] text-slate-500 mt-1">
+                    <?= number_format($stats['today_spaces_count']) ?> spaces stamped today
+                </p>
             </div>
-            <a href="reports.php" class="btn-touch mt-3 w-full py-2 px-3 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white border border-emerald-200 transition shadow-xs flex items-center justify-center gap-1.5">
+            <a href="reports.php" class="btn-touch mt-3 w-full py-2 px-3 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white border border-emerald-200 transition-all duration-150 flex items-center justify-center gap-1.5 shadow-2xs group">
                 <span>Daily Records</span>
-                <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                <i class="fa-solid fa-arrow-right text-[10px] group-hover:translate-x-0.5 transition-transform"></i>
             </a>
         </div>
 
-        <!-- 4th: Active Susu Cards & Total Customers -->
-        <div class="kpi-card flex flex-col justify-between">
+        <!-- Card 2: Live Field Cash (Risk & Cash in Hand - Position 2) -->
+        <div class="kpi-card flex flex-col justify-between bg-white hover:border-pumpkin_spice/40 transition-all duration-200">
+            <div>
+                <div class="flex items-center justify-between">
+                    <div class="kpi-icon bg-orange-50 text-pumpkin_spice">
+                        <i class="fa-solid fa-hand-holding-dollar"></i>
+                    </div>
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full <?= $stats['cash_in_field'] > 0 ? 'bg-orange-100 text-pumpkin_spice border border-orange-200' : 'bg-slate-100 text-slate-500' ?>">
+                        <?= $stats['cash_in_field'] > 0 ? 'In Field Bags' : 'All Settled' ?>
+                    </span>
+                </div>
+                <span class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider block mt-2">Cash in Field</span>
+                <div class="mt-1 text-xl sm:text-2xl font-black text-pumpkin_spice">
+                    <?= format_money($stats['cash_in_field']) ?>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">
+                    <?= $stats['cash_in_field'] > 0 ? 'Awaiting office handover' : 'All collector bags settled' ?>
+                </p>
+            </div>
+            <a href="daily_handover.php" class="btn-touch mt-3 w-full py-2 px-3 rounded-xl text-xs font-bold bg-orange-50 text-pumpkin_spice hover:bg-pumpkin_spice hover:text-white border border-orange-200 transition-all duration-150 flex items-center justify-center gap-1.5 shadow-2xs group">
+                <span>Receive Handover</span>
+                <i class="fa-solid fa-arrow-right text-[10px] group-hover:translate-x-0.5 transition-transform"></i>
+            </a>
+        </div>
+
+        <!-- Card 3: Active Savings Portfolio (Volume & Customers - Position 3) -->
+        <div class="kpi-card flex flex-col justify-between bg-white hover:border-steel_azure/40 transition-all duration-200">
             <div>
                 <div class="flex items-center justify-between">
                     <div class="kpi-icon bg-blue-50 text-steel_azure">
-                        <i class="fa-solid fa-users"></i>
+                        <i class="fa-solid fa-piggy-bank"></i>
                     </div>
-                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-steel_azure">
-                        <?= number_format($stats['total_customers']) ?> Registered
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-steel_azure border border-blue-200">
+                        <?= number_format($stats['active_cards']) ?> Active Cards
                     </span>
                 </div>
-                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mt-2">Active Cards / Total</span>
-                <div class="mt-1 flex items-baseline gap-1.5">
-                    <span class="text-xl sm:text-2xl font-extrabold text-steel_azure">
-                        <?= number_format($stats['active_cards']) ?>
-                    </span>
-                    <span class="text-xs font-bold text-slate-400">
-                        active / <strong class="text-slate-700"><?= number_format($stats['total_customers']) ?></strong> clients
-                    </span>
+                <span class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider block mt-2">Ongoing Savings</span>
+                <div class="mt-1 text-xl sm:text-2xl font-black text-steel_azure">
+                    <?= format_money($stats['total_saved_active']) ?>
                 </div>
+                <p class="text-[11px] text-slate-500 mt-1">
+                    across <strong class="text-slate-700"><?= number_format($stats['total_customers']) ?></strong> registered clients
+                </p>
             </div>
-            <a href="customers.php" class="btn-touch mt-3 w-full py-2 px-3 rounded-xl text-xs font-bold bg-blue-50 text-steel_azure hover:bg-steel_azure hover:text-white border border-blue-200 transition shadow-xs flex items-center justify-center gap-1.5">
+            <a href="customers.php" class="btn-touch mt-3 w-full py-2 px-3 rounded-xl text-xs font-bold bg-blue-50 text-steel_azure hover:bg-steel_azure hover:text-white border border-blue-200 transition-all duration-150 flex items-center justify-center gap-1.5 shadow-2xs group">
                 <span>View Customers</span>
-                <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                <i class="fa-solid fa-arrow-right text-[10px] group-hover:translate-x-0.5 transition-transform"></i>
+            </a>
+        </div>
+
+        <!-- Card 4: Approvals & Cashout Queue (Action Center - Serial Position: Last) -->
+        <?php 
+        $pendingTotal = $stats['pending_handovers'] + $stats['pending_payouts'];
+        $hasActions = $pendingTotal > 0 || $stats['completed_ready_cashout'] > 0;
+        ?>
+        <div class="kpi-card flex flex-col justify-between bg-white hover:border-purple-300 transition-all duration-200">
+            <div>
+                <div class="flex items-center justify-between">
+                    <div class="kpi-icon <?= $pendingTotal > 0 ? 'bg-amber-50 text-amber-600' : 'bg-purple-50 text-purple-700' ?>">
+                        <i class="fa-solid <?= $pendingTotal > 0 ? 'fa-bell' : 'fa-clipboard-check' ?>"></i>
+                    </div>
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full <?= $pendingTotal > 0 ? 'bg-amber-100 text-amber-800 border border-amber-300' : ($stats['completed_ready_cashout'] > 0 ? 'bg-purple-100 text-purple-800 border border-purple-200' : 'bg-slate-100 text-slate-500') ?>">
+                        <?= $pendingTotal > 0 ? 'Action Needed' : ($stats['completed_ready_cashout'] > 0 ? $stats['completed_ready_cashout'] . ' Ready to Cashout' : 'All Clear') ?>
+                    </span>
+                </div>
+                <span class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider block mt-2">Action Center</span>
+                <div class="mt-1 text-xl sm:text-2xl font-black <?= $pendingTotal > 0 ? 'text-amber-600' : 'text-slate-800' ?>">
+                    <?= $pendingTotal > 0 ? $pendingTotal . ' Pending' : number_format($stats['completed_ready_cashout']) . ' Ready' ?>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">
+                    <?= $stats['pending_handovers'] ?> handovers &bull; <?= $stats['completed_ready_cashout'] ?> ready cashouts
+                </p>
+            </div>
+            <a href="<?= $stats['pending_handovers'] > 0 ? 'daily_handover.php' : 'payouts.php' ?>" class="btn-touch mt-3 w-full py-2 px-3 rounded-xl text-xs font-bold bg-purple-50 text-purple-800 hover:bg-purple-700 hover:text-white border border-purple-200 transition-all duration-150 flex items-center justify-center gap-1.5 shadow-2xs group">
+                <span><?= $stats['pending_handovers'] > 0 ? 'Review Handovers' : 'Manage Cashouts' ?></span>
+                <i class="fa-solid fa-arrow-right text-[10px] group-hover:translate-x-0.5 transition-transform"></i>
             </a>
         </div>
 
