@@ -317,7 +317,7 @@ require_once __DIR__ . '/includes/header.php';
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 section-card">
         <div>
             <h1 class="text-xl sm:text-2xl font-black text-steel_azure">Daily Cash Handover</h1>
-            <p class="text-xs sm:text-sm text-slate-500 mt-0.5">Reconcile physical cash collections with system calculations.</p>
+            <p class="text-xs sm:text-sm text-slate-500 mt-0.5">Check physical cash brought by collectors against the system record.</p>
         </div>
         <div>
             <a href="<?= $user['role'] === 'admin' ? 'admin_dashboard.php' : 'collector_dashboard.php' ?>" class="text-xs font-bold text-cornflower_ocean hover:text-steel_azure inline-flex items-center gap-1.5">
@@ -343,7 +343,7 @@ require_once __DIR__ . '/includes/header.php';
                         <i class="fa-solid fa-wallet text-steel_azure"></i>
                         <span>Staff & Office Cash Bags</span>
                     </h2>
-                    <p class="text-xs text-slate-500">Click any staff member or admin account to clear or reconcile cash collections.</p>
+                    <p class="text-xs text-slate-500">Click any staff member or admin account to receive their cash or check their bag.</p>
                 </div>
             </div>
 
@@ -641,8 +641,8 @@ require_once __DIR__ . '/includes/header.php';
                 <i class="fa-solid fa-file-invoice-dollar"></i>
             </div>
             <div>
-                <h2 class="text-base font-bold text-slate-800">Settlement History</h2>
-                <p class="text-xs text-slate-500">Record of reconciled, approved, and rejected daily cash handovers.</p>
+                <h2 class="text-base font-bold text-slate-800">Past Cash Handovers</h2>
+                <p class="text-xs text-slate-500">List of all cash handovers checked, approved, or rejected by the admin.</p>
             </div>
         </div>
 

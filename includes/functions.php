@@ -459,17 +459,55 @@ function get_admin_dashboard_stats() {
     $stmt6 = $pdo->query("SELECT COUNT(*) FROM customers WHERE is_active = 1");
     $total_customers = (int)$stmt6->fetchColumn();
 
+    // Overall Total Handovers (Cumulative verified cash received by office)
+    $stmtHandovers = $pdo->query("
+        SELECT COALESCE(SUM(cash_received), 0.00), COUNT(*) 
+        FROM daily_handovers 
+        WHERE status IN ('approved', 'has_difference')
+    ");
+    $handoverRow = $stmtHandovers->fetch(PDO::FETCH_NUM);
+    $overall_handovers = (float)($handoverRow[0] ?? 0);
+    $approved_handovers_count = (int)($handoverRow[1] ?? 0);
+
+    // Overall Total Cashout & Overall System Charges (Cumulative paid customer payouts)
+    $stmtPayouts = $pdo->query("
+        SELECT COALESCE(SUM(customer_payout), 0.00), 
+               COALESCE(SUM(business_fee), 0.00), 
+               COUNT(*) 
+        FROM payouts 
+        WHERE status = 'paid'
+    ");
+    $payoutRow = $stmtPayouts->fetch(PDO::FETCH_NUM);
+    $overall_cashout = (float)($payoutRow[0] ?? 0);
+    $overall_system_charges = (float)($payoutRow[1] ?? 0);
+    $paid_cashouts_count = (int)($payoutRow[2] ?? 0);
+
+    // Overall Gross Collections (Total lifetime deposits collected)
+    $stmtGross = $pdo->query("SELECT COALESCE(SUM(amount), 0.00) FROM deposits");
+    $overall_gross_collections = (float)$stmtGross->fetchColumn();
+
+    // Overall Net Balance = Overall Gross - (Overall Cashout + Overall System Charges)
+    $overall_net_balance = $overall_gross_collections - ($overall_cashout + $overall_system_charges);
+
     return [
-        'today_collections'       => $today_collections,
-        'today_spaces_count'      => $today_spaces_count,
-        'cash_in_field'           => $cash_in_field,
-        'active_cards'            => $active_cards,
-        'total_saved_active'      => $total_saved_active,
-        'pending_payouts'         => $pending_payouts,
-        'pending_handovers'       => $pending_handovers,
-        'completed_ready_cashout' => $completed_ready_cashout,
-        'total_business_fees'     => $total_business_fees,
-        'total_customers'         => $total_customers
+        'today_collections'         => $today_collections,
+        'today_spaces_count'        => $today_spaces_count,
+        'cash_in_field'             => $cash_in_field,
+        'active_cards'              => $active_cards,
+        'total_saved_active'        => $total_saved_active,
+        'pending_payouts'           => $pending_payouts,
+        'pending_handovers'         => $pending_handovers,
+        'completed_ready_cashout'   => $completed_ready_cashout,
+        'total_business_fees'       => $total_business_fees,
+        'total_customers'           => $total_customers,
+        'overall_handovers'         => $overall_handovers,
+        'approved_handovers_count'  => $approved_handovers_count,
+        'overall_cashout'           => $overall_cashout,
+        'paid_cashouts_count'       => $paid_cashouts_count,
+        'overall_system_charges'    => $overall_system_charges,
+        'overall_gross'             => $overall_gross_collections,
+        'overall_gross_collections' => $overall_gross_collections,
+        'overall_net_balance'       => $overall_net_balance
     ];
 }
 
