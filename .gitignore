@@ -11,3 +11,10 @@ Desktop.ini
 
 # Log files
 *.log
+# Data and database dumps
+*.sql
+*.csv
+customers (1).sql
+customers.sql
+Eyram Susu Database.csv
+database/*.sql

@@ -41,7 +41,7 @@ $pendingTotal = $stats['pending_handovers'] + $stats['pending_payouts'];
 require_once __DIR__ . '/includes/header.php';
 ?>
 
-<div class="space-y-5 sm:space-y-6">
+<div class="space-y-5 sm:space-y-6" id="top">
     
     <!-- 1. Welcome Header & Top Actions (Hick's Law: One Primary, One Secondary CTA) -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 section-card">
@@ -80,17 +80,168 @@ require_once __DIR__ . '/includes/header.php';
         </div>
     </div>
 
-    <!-- 2. Today's Money & Activity (Serial Position: Dominant Daily Pulse First) -->
-    <div class="space-y-3">
+    <!-- 2. Overall Business Totals (Seen at a Glance with Privacy Balance Masking & Quick Jump) -->
+    <div class="bg-white rounded-2xl border-2 border-silver-600 shadow-sm p-3.5 sm:p-5 space-y-3.5 sm:space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-steel_azure/10 text-steel_azure flex items-center justify-center text-sm font-black shrink-0">
+                    <i class="fa-solid fa-chart-pie"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <h2 class="text-sm sm:text-base font-black text-slate-800">Overall Business Totals</h2>
+                        <span class="text-[10px] sm:text-xs font-extrabold px-2 py-0.5 rounded-full bg-platinum text-slate-700 border border-silver-600/80">
+                            All-Time Totals
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-500 hidden sm:block">The total money collected, received in the office, and paid out since the start.</p>
+                </div>
+            </div>
+
+            <!-- Header Action Controls: Jump to Today's Actions + Balance Privacy Mask Toggle -->
+            <div class="flex items-center gap-2 w-full sm:w-auto">
+                <!-- Reveal & Jump Button for Today's Money & Actions (Fitts's & Hick's Law - Progressive Disclosure) -->
+                <button type="button" id="toggleTodayActionsBtn" onclick="toggleTodayActions()" class="btn-touch flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-emerald-50 text-emerald-800 hover:bg-emerald-600 hover:text-white border border-emerald-300 transition shadow-2xs min-h-[44px] cursor-pointer group" aria-expanded="false" aria-controls="today-actions">
+                    <i class="fa-solid fa-calendar-day text-xs text-emerald-600 group-hover:text-white transition-colors"></i>
+                    <span id="todayActionsBtnTitle">Today's Actions</span>
+                    <span id="todayActionsBadge" class="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-emerald-200/80 text-emerald-900 group-hover:bg-white group-hover:text-emerald-800 transition">Reveal</span>
+                    <i id="todayActionsArrow" class="fa-solid fa-chevron-down text-[10px] text-emerald-700 group-hover:text-white group-hover:translate-y-0.5 transition-transform"></i>
+                </button>
+
+                <!-- Mask Feature Icon Functionality (Privacy Toggle: Hick's Law - Secondary Utility) -->
+                <button type="button" id="toggleMaskBtn" onclick="toggleBalanceMasking()" class="btn-touch inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 transition shadow-2xs min-h-[44px] cursor-pointer" aria-label="Toggle balance privacy" title="Click to hide or show sensitive amounts">
+                    <i id="maskIcon" class="fa-solid fa-eye text-sm text-steel_azure"></i>
+                    <span id="maskBtnText" class="text-xs font-bold">Hide</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+            
+            <!-- Card 1: Total Cash Received in Office -->
+            <div class="p-3 sm:p-4 rounded-xl bg-slate-50/80 border border-slate-200 hover:border-steel_azure/50 transition flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between">
+                        <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-blue-100 text-steel_azure flex items-center justify-center text-xs font-bold">
+                            <i class="fa-solid fa-vault"></i>
+                        </div>
+                        <span class="text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full bg-blue-100 text-steel_azure border border-blue-200">
+                            Office Drawer
+                        </span>
+                    </div>
+                    <span class="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider block mt-2">Cash Received</span>
+                    <div class="mt-0.5 sm:mt-1 text-sm sm:text-lg lg:text-xl font-black text-steel_azure truncate maskable-balance" data-value="<?= htmlspecialchars(format_money($stats['overall_handovers'])) ?>" title="<?= format_money($stats['overall_handovers']) ?>">
+                        <?= format_money($stats['overall_handovers']) ?>
+                    </div>
+                    <p class="text-[10px] sm:text-[11px] text-slate-500 mt-0.5 line-clamp-1">
+                        <?= number_format($stats['approved_handovers_count']) ?> verified handovers
+                    </p>
+                </div>
+                <a href="daily_handover.php" class="btn-touch mt-2.5 sm:mt-3 w-full py-1.5 px-2 rounded-lg text-[11px] sm:text-xs font-bold bg-white text-steel_azure hover:bg-steel_azure hover:text-white border border-blue-200 transition flex items-center justify-center gap-1 shadow-2xs">
+                    <span>View Handovers</span>
+                    <i class="fa-solid fa-arrow-right text-[9px]"></i>
+                </a>
+            </div>
+
+            <!-- Card 2: Total Paid Out to Customers -->
+            <div class="p-3 sm:p-4 rounded-xl bg-slate-50/80 border border-slate-200 hover:border-purple-300 transition flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between">
+                        <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center text-xs font-bold">
+                            <i class="fa-solid fa-money-bill-transfer"></i>
+                        </div>
+                        <span class="text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200">
+                            Paid Out
+                        </span>
+                    </div>
+                    <span class="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider block mt-2">Paid to Clients</span>
+                    <div class="mt-0.5 sm:mt-1 text-sm sm:text-lg lg:text-xl font-black text-purple-700 truncate maskable-balance" data-value="<?= htmlspecialchars(format_money($stats['overall_cashout'])) ?>" title="<?= format_money($stats['overall_cashout']) ?>">
+                        <?= format_money($stats['overall_cashout']) ?>
+                    </div>
+                    <p class="text-[10px] sm:text-[11px] text-slate-500 mt-0.5 line-clamp-1">
+                        across <?= number_format($stats['paid_cashouts_count']) ?> completed cards
+                    </p>
+                </div>
+                <a href="payouts.php" class="btn-touch mt-2.5 sm:mt-3 w-full py-1.5 px-2 rounded-lg text-[11px] sm:text-xs font-bold bg-white text-purple-800 hover:bg-purple-700 hover:text-white border border-purple-200 transition flex items-center justify-center gap-1 shadow-2xs">
+                    <span>View Cashouts</span>
+                    <i class="fa-solid fa-arrow-right text-[9px]"></i>
+                </a>
+            </div>
+
+            <!-- Card 3: Total Office Profit -->
+            <div class="p-3 sm:p-4 rounded-xl bg-slate-50/80 border border-slate-200 hover:border-orange-300 transition flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between">
+                        <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-orange-100 text-pumpkin_spice flex items-center justify-center text-xs font-bold">
+                            <i class="fa-solid fa-coins"></i>
+                        </div>
+                        <span class="text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full bg-orange-100 text-pumpkin_spice border border-orange-200">
+                            Profit
+                        </span>
+                    </div>
+                    <span class="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider block mt-2">Office Profit</span>
+                    <div class="mt-0.5 sm:mt-1 text-sm sm:text-lg lg:text-xl font-black text-pumpkin_spice truncate maskable-balance" data-value="<?= htmlspecialchars(format_money($stats['overall_system_charges'])) ?>" title="<?= format_money($stats['overall_system_charges']) ?>">
+                        <?= format_money($stats['overall_system_charges']) ?>
+                    </div>
+                    <p class="text-[10px] sm:text-[11px] text-slate-500 mt-0.5 line-clamp-1">
+                        from card management fees
+                    </p>
+                </div>
+                <a href="reports.php" class="btn-touch mt-2.5 sm:mt-3 w-full py-1.5 px-2 rounded-lg text-[11px] sm:text-xs font-bold bg-white text-pumpkin_spice hover:bg-pumpkin_spice hover:text-white border border-orange-200 transition flex items-center justify-center gap-1 shadow-2xs">
+                    <span>View Profit</span>
+                    <i class="fa-solid fa-arrow-right text-[9px]"></i>
+                </a>
+            </div>
+
+            <!-- Card 4: Money Left with Office -->
+            <div class="p-3 sm:p-4 rounded-xl bg-slate-50/80 border border-slate-200 hover:border-emerald-300 transition flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between">
+                        <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-bold">
+                            <i class="fa-solid fa-scale-balanced"></i>
+                        </div>
+                        <span class="text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            Net Left
+                        </span>
+                    </div>
+                    <span class="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider block mt-2">Money Left</span>
+                    <div class="mt-0.5 sm:mt-1 text-sm sm:text-lg lg:text-xl font-black text-emerald-600 truncate maskable-balance" data-value="<?= htmlspecialchars(format_money($stats['overall_net_balance'])) ?>" title="<?= format_money($stats['overall_net_balance']) ?>">
+                        <?= format_money($stats['overall_net_balance']) ?>
+                    </div>
+                    <p class="text-[10px] sm:text-[11px] text-slate-500 mt-0.5 line-clamp-1" title="Total collected: <?= format_money($stats['overall_gross_collections']) ?>">
+                        minus money paid out
+                    </p>
+                </div>
+                <a href="reports.php" class="btn-touch mt-2.5 sm:mt-3 w-full py-1.5 px-2 rounded-lg text-[11px] sm:text-xs font-bold bg-white text-emerald-700 hover:bg-emerald-600 hover:text-white border border-emerald-200 transition flex items-center justify-center gap-1 shadow-2xs">
+                    <span>Full Ledger</span>
+                    <i class="fa-solid fa-arrow-right text-[9px]"></i>
+                </a>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- 3. Today's Money & Actions (Progressive Disclosure: Revealed upon tabbing / clicking) -->
+    <div id="today-actions" class="space-y-3 scroll-mt-20 hidden transition-all duration-300 ease-out transform opacity-0 translate-y-2">
         <div class="flex items-center justify-between gap-2 px-1">
             <div class="flex items-center gap-2">
                 <div class="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center text-xs font-bold">
                     <i class="fa-solid fa-calendar-day"></i>
                 </div>
                 <div>
-                    <h2 class="text-sm sm:text-base font-black text-slate-800">Today's Money & Actions</h2>
+                    <h2 class="text-sm sm:text-base font-black text-slate-800">Today's Money &amp; Actions</h2>
                     <p class="text-xs text-slate-500">What has come in today and what needs your attention right now.</p>
                 </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <button type="button" onclick="toggleTodayActions(false)" class="btn-touch px-2.5 py-1 text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-300 transition inline-flex items-center gap-1 shadow-2xs cursor-pointer min-h-[36px]" title="Hide Today's Actions to reduce clutter">
+                    <i class="fa-solid fa-chevron-up text-[10px]"></i>
+                    <span>Hide Cards</span>
+                </button>
+                <a href="#top" class="text-[11px] font-bold text-slate-400 hover:text-steel_azure inline-flex items-center gap-1 transition" title="Back to Overall Totals">
+                    <i class="fa-solid fa-arrow-up text-[10px]"></i>
+                    <span class="hidden sm:inline">Overall Totals</span>
+                </a>
             </div>
         </div>
 
@@ -109,7 +260,7 @@ require_once __DIR__ . '/includes/header.php';
                         </span>
                     </div>
                     <span class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider block mt-2">Money Collected</span>
-                    <div class="mt-1 text-base sm:text-xl lg:text-2xl font-black text-emerald-600 truncate" title="<?= format_money($stats['today_collections']) ?>">
+                    <div class="mt-1 text-base sm:text-xl lg:text-2xl font-black text-emerald-600 truncate maskable-balance" data-value="<?= htmlspecialchars(format_money($stats['today_collections'])) ?>" title="<?= format_money($stats['today_collections']) ?>">
                         <?= format_money($stats['today_collections']) ?>
                     </div>
                     <p class="text-[10px] sm:text-[11px] text-slate-500 mt-1 line-clamp-1">
@@ -134,7 +285,7 @@ require_once __DIR__ . '/includes/header.php';
                         </span>
                     </div>
                     <span class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider block mt-2">Cash with Collectors</span>
-                    <div class="mt-1 text-base sm:text-xl lg:text-2xl font-black text-pumpkin_spice truncate" title="<?= format_money($stats['cash_in_field']) ?>">
+                    <div class="mt-1 text-base sm:text-xl lg:text-2xl font-black text-pumpkin_spice truncate maskable-balance" data-value="<?= htmlspecialchars(format_money($stats['cash_in_field'])) ?>" title="<?= format_money($stats['cash_in_field']) ?>">
                         <?= format_money($stats['cash_in_field']) ?>
                     </div>
                     <p class="text-[10px] sm:text-[11px] text-slate-500 mt-1 line-clamp-1">
@@ -159,7 +310,7 @@ require_once __DIR__ . '/includes/header.php';
                         </span>
                     </div>
                     <span class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider block mt-2">Customer Savings</span>
-                    <div class="mt-1 text-base sm:text-xl lg:text-2xl font-black text-steel_azure truncate" title="<?= format_money($stats['total_saved_active']) ?>">
+                    <div class="mt-1 text-base sm:text-xl lg:text-2xl font-black text-steel_azure truncate maskable-balance" data-value="<?= htmlspecialchars(format_money($stats['total_saved_active'])) ?>" title="<?= format_money($stats['total_saved_active']) ?>">
                         <?= format_money($stats['total_saved_active']) ?>
                     </div>
                     <p class="text-[10px] sm:text-[11px] text-slate-500 mt-1 line-clamp-1">
@@ -194,128 +345,6 @@ require_once __DIR__ . '/includes/header.php';
                 <a href="<?= $stats['pending_handovers'] > 0 ? 'daily_handover.php' : 'payouts.php' ?>" class="btn-touch mt-2.5 sm:mt-3 w-full py-2 px-2.5 sm:px-3 rounded-xl text-xs font-bold bg-purple-50 text-purple-800 hover:bg-purple-700 hover:text-white border border-purple-200 transition-all duration-150 flex items-center justify-center gap-1 shadow-2xs group">
                     <span><?= $stats['pending_handovers'] > 0 ? 'Review Handovers' : 'Manage Cashouts' ?></span>
                     <i class="fa-solid fa-arrow-right text-[10px] group-hover:translate-x-0.5 transition-transform"></i>
-                </a>
-            </div>
-
-        </div>
-    </div>
-
-    <!-- 3. Overall Business Totals (Gestalt Similarity: Distinct Container for All-Time Numbers) -->
-    <div class="bg-white rounded-2xl border-2 border-silver-600 shadow-sm p-3.5 sm:p-5 space-y-3 sm:space-y-3.5">
-        <div class="flex items-center justify-between gap-2">
-            <div class="flex items-center gap-2 sm:gap-2.5">
-                <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-steel_azure/10 text-steel_azure flex items-center justify-center text-xs sm:text-sm font-black">
-                    <i class="fa-solid fa-chart-pie"></i>
-                </div>
-                <div>
-                    <h2 class="text-sm sm:text-base font-black text-slate-800">Overall Business Totals</h2>
-                    <p class="text-xs text-slate-500 hidden sm:block">The total money collected, received in the office, and paid out since the start.</p>
-                </div>
-            </div>
-            <span class="text-[10px] sm:text-xs font-extrabold px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-platinum text-slate-700 border border-silver-600/80">
-                All-Time Totals
-            </span>
-        </div>
-
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
-            
-            <!-- Card 1: Total Cash Received in Office -->
-            <div class="p-3 sm:p-4 rounded-xl bg-slate-50/80 border border-slate-200 hover:border-steel_azure/50 transition flex flex-col justify-between">
-                <div>
-                    <div class="flex items-center justify-between">
-                        <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-blue-100 text-steel_azure flex items-center justify-center text-xs font-bold">
-                            <i class="fa-solid fa-vault"></i>
-                        </div>
-                        <span class="text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full bg-blue-100 text-steel_azure border border-blue-200">
-                            Office Drawer
-                        </span>
-                    </div>
-                    <span class="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider block mt-2">Cash Received</span>
-                    <div class="mt-0.5 sm:mt-1 text-sm sm:text-lg lg:text-xl font-black text-steel_azure truncate" title="<?= format_money($stats['overall_handovers']) ?>">
-                        <?= format_money($stats['overall_handovers']) ?>
-                    </div>
-                    <p class="text-[10px] sm:text-[11px] text-slate-500 mt-0.5 line-clamp-1">
-                        <?= number_format($stats['approved_handovers_count']) ?> verified handovers
-                    </p>
-                </div>
-                <a href="daily_handover.php" class="btn-touch mt-2.5 sm:mt-3 w-full py-1.5 px-2 rounded-lg text-[11px] sm:text-xs font-bold bg-white text-steel_azure hover:bg-steel_azure hover:text-white border border-blue-200 transition flex items-center justify-center gap-1 shadow-2xs">
-                    <span>View Handovers</span>
-                    <i class="fa-solid fa-arrow-right text-[9px]"></i>
-                </a>
-            </div>
-
-            <!-- Card 2: Total Paid Out to Customers -->
-            <div class="p-3 sm:p-4 rounded-xl bg-slate-50/80 border border-slate-200 hover:border-purple-300 transition flex flex-col justify-between">
-                <div>
-                    <div class="flex items-center justify-between">
-                        <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center text-xs font-bold">
-                            <i class="fa-solid fa-money-bill-transfer"></i>
-                        </div>
-                        <span class="text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200">
-                            Paid Out
-                        </span>
-                    </div>
-                    <span class="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider block mt-2">Paid to Clients</span>
-                    <div class="mt-0.5 sm:mt-1 text-sm sm:text-lg lg:text-xl font-black text-purple-700 truncate" title="<?= format_money($stats['overall_cashout']) ?>">
-                        <?= format_money($stats['overall_cashout']) ?>
-                    </div>
-                    <p class="text-[10px] sm:text-[11px] text-slate-500 mt-0.5 line-clamp-1">
-                        across <?= number_format($stats['paid_cashouts_count']) ?> completed cards
-                    </p>
-                </div>
-                <a href="payouts.php" class="btn-touch mt-2.5 sm:mt-3 w-full py-1.5 px-2 rounded-lg text-[11px] sm:text-xs font-bold bg-white text-purple-800 hover:bg-purple-700 hover:text-white border border-purple-200 transition flex items-center justify-center gap-1 shadow-2xs">
-                    <span>View Cashouts</span>
-                    <i class="fa-solid fa-arrow-right text-[9px]"></i>
-                </a>
-            </div>
-
-            <!-- Card 3: Total Office Profit -->
-            <div class="p-3 sm:p-4 rounded-xl bg-slate-50/80 border border-slate-200 hover:border-orange-300 transition flex flex-col justify-between">
-                <div>
-                    <div class="flex items-center justify-between">
-                        <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-orange-100 text-pumpkin_spice flex items-center justify-center text-xs font-bold">
-                            <i class="fa-solid fa-coins"></i>
-                        </div>
-                        <span class="text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full bg-orange-100 text-pumpkin_spice border border-orange-200">
-                            Profit
-                        </span>
-                    </div>
-                    <span class="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider block mt-2">Office Profit</span>
-                    <div class="mt-0.5 sm:mt-1 text-sm sm:text-lg lg:text-xl font-black text-pumpkin_spice truncate" title="<?= format_money($stats['overall_system_charges']) ?>">
-                        <?= format_money($stats['overall_system_charges']) ?>
-                    </div>
-                    <p class="text-[10px] sm:text-[11px] text-slate-500 mt-0.5 line-clamp-1">
-                        from card management fees
-                    </p>
-                </div>
-                <a href="reports.php" class="btn-touch mt-2.5 sm:mt-3 w-full py-1.5 px-2 rounded-lg text-[11px] sm:text-xs font-bold bg-white text-pumpkin_spice hover:bg-pumpkin_spice hover:text-white border border-orange-200 transition flex items-center justify-center gap-1 shadow-2xs">
-                    <span>View Profit</span>
-                    <i class="fa-solid fa-arrow-right text-[9px]"></i>
-                </a>
-            </div>
-
-            <!-- Card 4: Money Left with Office -->
-            <div class="p-3 sm:p-4 rounded-xl bg-slate-50/80 border border-slate-200 hover:border-emerald-300 transition flex flex-col justify-between">
-                <div>
-                    <div class="flex items-center justify-between">
-                        <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-bold">
-                            <i class="fa-solid fa-scale-balanced"></i>
-                        </div>
-                        <span class="text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
-                            Net Left
-                        </span>
-                    </div>
-                    <span class="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider block mt-2">Money Left</span>
-                    <div class="mt-0.5 sm:mt-1 text-sm sm:text-lg lg:text-xl font-black text-emerald-600 truncate" title="<?= format_money($stats['overall_net_balance']) ?>">
-                        <?= format_money($stats['overall_net_balance']) ?>
-                    </div>
-                    <p class="text-[10px] sm:text-[11px] text-slate-500 mt-0.5 line-clamp-1" title="Total collected: <?= format_money($stats['overall_gross_collections']) ?>">
-                        minus money paid out
-                    </p>
-                </div>
-                <a href="reports.php" class="btn-touch mt-2.5 sm:mt-3 w-full py-1.5 px-2 rounded-lg text-[11px] sm:text-xs font-bold bg-white text-emerald-700 hover:bg-emerald-600 hover:text-white border border-emerald-200 transition flex items-center justify-center gap-1 shadow-2xs">
-                    <span>Full Ledger</span>
-                    <i class="fa-solid fa-arrow-right text-[9px]"></i>
                 </a>
             </div>
 
@@ -602,7 +631,7 @@ require_once __DIR__ . '/includes/header.php';
                     <h3 class="text-sm sm:text-base font-black text-white">Daily Office Checklist</h3>
                     <p class="text-xs text-slate-300 mt-0.5">
                         <?= $stats['cash_in_field'] > 0 
-                            ? 'You have <strong class="text-amber-400">' . format_money($stats['cash_in_field']) . '</strong> still with collectors. Receive their handovers before closing the office.' 
+                            ? 'You have <strong class="text-amber-400 maskable-balance" data-value="' . htmlspecialchars(format_money($stats['cash_in_field'])) . '">' . format_money($stats['cash_in_field']) . '</strong> still with collectors. Receive their handovers before closing the office.' 
                             : 'All collector cash has been received. Everything is balanced for the day.' 
                         ?>
                     </p>
@@ -623,5 +652,155 @@ require_once __DIR__ . '/includes/header.php';
     </div>
 
 </div>
+
+<!-- Privacy Balance Masking Script (HCI / Fintech Security Standard) -->
+<script>
+/**
+ * Eyram Susu - Privacy Balance Masking Feature
+ * Allows admin to discreetly mask sensitive financial totals across the dashboard.
+ * Persists user preference in localStorage for instant retrieval across logins.
+ */
+function toggleBalanceMasking() {
+    var isCurrentlyMasked = localStorage.getItem('eyram_dashboard_masked') === 'true';
+    var newMaskedState = !isCurrentlyMasked;
+    try {
+        localStorage.setItem('eyram_dashboard_masked', newMaskedState ? 'true' : 'false');
+    } catch(e) {
+        console.warn('localStorage not available', e);
+    }
+    applyBalanceMasking(newMaskedState);
+}
+
+function applyBalanceMasking(masked) {
+    var elements = document.querySelectorAll('.maskable-balance');
+    var maskIcon = document.getElementById('maskIcon');
+    var maskBtnText = document.getElementById('maskBtnText');
+    var toggleBtn = document.getElementById('toggleMaskBtn');
+
+    elements.forEach(function(el) {
+        var original = el.getAttribute('data-value') || el.textContent.trim();
+        if (masked) {
+            el.textContent = 'GH₵ ••••••';
+            el.setAttribute('title', 'Amount hidden for privacy. Click eye icon to reveal.');
+        } else {
+            el.textContent = original;
+            el.setAttribute('title', original);
+        }
+    });
+
+    if (maskIcon) {
+        if (masked) {
+            maskIcon.className = 'fa-solid fa-eye-slash text-sm text-amber-600';
+            if (maskBtnText) maskBtnText.textContent = 'Show';
+            if (toggleBtn) {
+                toggleBtn.setAttribute('title', 'Click to reveal sensitive amounts');
+                toggleBtn.setAttribute('aria-label', 'Reveal balances');
+                toggleBtn.classList.add('bg-amber-50', 'border-amber-300', 'text-amber-800');
+                toggleBtn.classList.remove('bg-slate-100', 'border-slate-300', 'text-slate-700');
+            }
+        } else {
+            maskIcon.className = 'fa-solid fa-eye text-sm text-steel_azure';
+            if (maskBtnText) maskBtnText.textContent = 'Hide';
+            if (toggleBtn) {
+                toggleBtn.setAttribute('title', 'Click to hide sensitive amounts');
+                toggleBtn.setAttribute('aria-label', 'Hide balances');
+                toggleBtn.classList.remove('bg-amber-50', 'border-amber-300', 'text-amber-800');
+                toggleBtn.classList.add('bg-slate-100', 'border-slate-300', 'text-slate-700');
+            }
+        }
+    }
+}
+
+/**
+ * Eyram Susu - Progressive Disclosure for Today's Money & Actions
+ * Keeps daily cards collapsed to avoid visual overload. Tabbing or tapping
+ * "Today's Actions" smoothly reveals the cards and glides down to them.
+ */
+function toggleTodayActions(forceState) {
+    var container = document.getElementById('today-actions');
+    var btn = document.getElementById('toggleTodayActionsBtn');
+    var badge = document.getElementById('todayActionsBadge');
+    var arrow = document.getElementById('todayActionsArrow');
+
+    if (!container) return;
+
+    var isHidden = container.classList.contains('hidden');
+    var shouldReveal = (typeof forceState === 'boolean') ? forceState : isHidden;
+
+    if (shouldReveal) {
+        // Reveal container
+        container.classList.remove('hidden');
+        requestAnimationFrame(function() {
+            container.classList.remove('opacity-0', 'translate-y-2');
+            container.classList.add('opacity-100', 'translate-y-0');
+        });
+
+        if (btn) {
+            btn.setAttribute('aria-expanded', 'true');
+            btn.classList.remove('bg-emerald-50', 'text-emerald-800', 'border-emerald-300');
+            btn.classList.add('bg-emerald-600', 'text-white', 'border-emerald-600');
+        }
+        if (badge) {
+            badge.textContent = 'Hide';
+            badge.className = 'text-[10px] font-black px-1.5 py-0.5 rounded-full bg-white/20 text-white';
+        }
+        if (arrow) {
+            arrow.className = 'fa-solid fa-chevron-up text-[10px] text-white transition-transform';
+        }
+
+        // Smooth scroll down to the revealed cards
+        setTimeout(function() {
+            container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 80);
+    } else {
+        // Hide / Collapse container
+        container.classList.remove('opacity-100', 'translate-y-0');
+        container.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(function() {
+            container.classList.add('hidden');
+        }, 220);
+
+        if (btn) {
+            btn.setAttribute('aria-expanded', 'false');
+            btn.classList.remove('bg-emerald-600', 'text-white', 'border-emerald-600');
+            btn.classList.add('bg-emerald-50', 'text-emerald-800', 'border-emerald-300');
+        }
+        if (badge) {
+            badge.textContent = 'Reveal';
+            badge.className = 'text-[10px] font-black px-1.5 py-0.5 rounded-full bg-emerald-200/80 text-emerald-900 group-hover:bg-white group-hover:text-emerald-800 transition';
+        }
+        if (arrow) {
+            arrow.className = 'fa-solid fa-chevron-down text-[10px] text-emerald-700 group-hover:text-white transition-transform';
+        }
+    }
+}
+
+// Auto-apply saved preferences & direct hash navigation on load
+(function() {
+    try {
+        var isMasked = localStorage.getItem('eyram_dashboard_masked') === 'true';
+        if (isMasked) {
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function() {
+                    applyBalanceMasking(true);
+                });
+            } else {
+                applyBalanceMasking(true);
+            }
+        }
+    } catch(e) {}
+
+    // If page is loaded with #today-actions hash, automatically reveal
+    if (window.location.hash === '#today-actions') {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                toggleTodayActions(true);
+            });
+        } else {
+            toggleTodayActions(true);
+        }
+    }
+})();
+</script>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

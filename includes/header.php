@@ -38,7 +38,7 @@ function ariaCurrent($page, $currentPage)
 }
 ?>
 <!DOCTYPE html>
-<html lang="en" class="h-full bg-slate-50">
+<html lang="en" class="h-full bg-slate-50 scroll-smooth">
 
 <head>
     <meta charset="UTF-8">
