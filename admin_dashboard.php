@@ -9,15 +9,15 @@ $pageTitle = "Admin Dashboard";
 $pdo = get_db_connection();
 $stats = get_admin_dashboard_stats();
 
-// Fetch collectors and their live cash bag
+// Fetch collectors and any staff/admin with active cash bags or collections
 $stmtCollectors = $pdo->query("
-    SELECT u.id, u.full_name, u.phone,
-           COALESCE(SUM(CASE WHEN d.handover_id IS NULL THEN d.amount ELSE 0 END), 0.00) as cash_in_hand,
-           COALESCE(SUM(CASE WHEN d.deposit_date = CURRENT_DATE THEN d.amount ELSE 0 END), 0.00) as today_collected
+    SELECT u.id, u.full_name, u.phone, u.role,
+           COALESCE((SELECT SUM(amount) FROM deposits WHERE collector_id = u.id AND handover_id IS NULL), 0.00) as cash_in_hand,
+           COALESCE((SELECT SUM(amount) FROM deposits WHERE collector_id = u.id AND deposit_date = CURRENT_DATE), 0.00) as today_collected
     FROM users u
-    LEFT JOIN deposits d ON u.id = d.collector_id
-    WHERE u.role = 'collector' AND u.is_active = 1
-    GROUP BY u.id, u.full_name, u.phone
+    WHERE u.is_active = 1
+      AND (u.role = 'collector' OR (SELECT COUNT(*) FROM deposits WHERE collector_id = u.id AND handover_id IS NULL) > 0 OR (SELECT COUNT(*) FROM deposits WHERE collector_id = u.id AND deposit_date = CURRENT_DATE) > 0)
+    ORDER BY (cash_in_hand > 0) DESC, u.role ASC, u.full_name ASC
 ");
 $collectors = $stmtCollectors->fetchAll();
 
@@ -222,7 +222,12 @@ require_once __DIR__ . '/includes/header.php';
                         <?php foreach ($collectors as $col): ?>
                             <tr class="hover:bg-platinum-800 transition">
                                 <td class="py-3 px-4 font-bold text-slate-800">
-                                    <?= htmlspecialchars($col['full_name']) ?>
+                                    <div class="flex items-center gap-1.5 flex-wrap">
+                                        <span><?= htmlspecialchars($col['full_name']) ?></span>
+                                        <?php if ($col['role'] === 'admin'): ?>
+                                            <span class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-200">Office / Admin</span>
+                                        <?php endif; ?>
+                                    </div>
                                 </td>
                                 <td class="py-3 px-4 text-slate-600">
                                     <?= htmlspecialchars($col['phone'] ?: 'N/A') ?>
@@ -234,9 +239,9 @@ require_once __DIR__ . '/includes/header.php';
                                     <?= format_money($col['cash_in_hand']) ?>
                                 </td>
                                 <td class="py-3 px-4 text-right">
-                                    <a href="daily_handover.php?collector_id=<?= $col['id'] ?>" class="btn-touch px-2.5 py-1 text-xs font-bold text-steel_azure hover:text-white hover:bg-steel_azure bg-blue-50 rounded-lg transition border border-blue-200 inline-flex items-center gap-1">
+                                    <a href="daily_handover.php?collector_id=<?= $col['id'] ?>" class="btn-touch px-2.5 py-1 text-xs font-bold <?= $col['cash_in_hand'] > 0 ? 'text-white bg-pumpkin_spice hover:bg-pumpkin_spice-400' : 'text-steel_azure hover:text-white hover:bg-steel_azure bg-blue-50 border border-blue-200' ?> rounded-lg transition inline-flex items-center gap-1 shadow-2xs">
                                         <i class="fa-solid fa-scale-balanced text-[10px]"></i>
-                                        <span>Receive Cash</span>
+                                        <span><?= $col['role'] === 'admin' ? 'Settle Office Cash' : 'Receive Cash' ?></span>
                                     </a>
                                 </td>
                             </tr>

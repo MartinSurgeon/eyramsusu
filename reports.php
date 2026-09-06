@@ -328,7 +328,7 @@ require_once __DIR__ . '/includes/header.php';
             <table class="w-full text-left text-xs sm:text-sm">
                 <thead class="bg-platinum text-slate-600 font-semibold border-b border-silver-600/70">
                     <tr>
-                        <th class="py-3 px-4">Time</th>
+                        <th class="py-3 px-4">Date & Time</th>
                         <th class="py-3 px-4">Customer</th>
                         <th class="py-3 px-4">Account #</th>
                         <th class="py-3 px-4">Card & Space #</th>
@@ -353,8 +353,14 @@ require_once __DIR__ . '/includes/header.php';
                     <?php else: ?>
                         <?php foreach ($deposits as $d): ?>
                             <tr class="hover:bg-platinum-800 transition">
-                                <td class="py-3 px-4 text-slate-600 whitespace-nowrap">
-                                    <?= date('h:i A', strtotime($d['created_at'])) ?>
+                                <td class="py-3 px-4 whitespace-nowrap">
+                                    <div class="font-bold text-slate-800">
+                                        <?= date('d M Y', strtotime($d['deposit_date'])) ?>
+                                    </div>
+                                    <div class="text-[11px] text-slate-400 font-medium flex items-center gap-1 mt-0.5">
+                                        <i class="fa-regular fa-clock text-[10px]"></i>
+                                        <span><?= date('h:i A', strtotime($d['created_at'])) ?></span>
+                                    </div>
                                 </td>
                                 <td class="py-3 px-4 font-bold text-slate-800">
                                     <?= htmlspecialchars($d['customer_name']) ?>
