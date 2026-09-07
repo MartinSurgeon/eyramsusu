@@ -323,27 +323,41 @@ require_once __DIR__ . '/includes/header.php';
                 </a>
             </div>
 
-            <!-- Card 4: Tasks Waiting for You -->
+            <!-- Card 4: Cashouts Ready / Actions -->
             <div class="kpi-card p-3 sm:p-4.5 flex flex-col justify-between bg-white hover:border-purple-300 transition-all duration-200">
                 <div>
                     <div class="flex items-center justify-between">
-                        <div class="kpi-icon <?= $pendingTotal > 0 ? 'bg-amber-50 text-amber-600' : 'bg-purple-50 text-purple-700' ?> mb-0">
-                            <i class="fa-solid <?= $pendingTotal > 0 ? 'fa-bell' : 'fa-clipboard-check' ?> text-xs sm:text-sm"></i>
+                        <div class="kpi-icon <?= $pendingTotal > 0 ? 'bg-amber-50 text-amber-600' : ($stats['completed_ready_cashout'] > 0 ? 'bg-purple-50 text-purple-700' : 'bg-slate-50 text-slate-500') ?> mb-0">
+                            <i class="fa-solid <?= $pendingTotal > 0 ? 'fa-bell' : ($stats['completed_ready_cashout'] > 0 ? 'fa-hand-holding-dollar' : 'fa-circle-check') ?> text-xs sm:text-sm"></i>
                         </div>
                         <span class="text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full <?= $pendingTotal > 0 ? 'bg-amber-100 text-amber-800 border border-amber-300' : ($stats['completed_ready_cashout'] > 0 ? 'bg-purple-100 text-purple-800 border border-purple-200' : 'bg-slate-100 text-slate-500') ?>">
-                            <?= $pendingTotal > 0 ? 'Attention' : ($stats['completed_ready_cashout'] > 0 ? 'Ready' : 'All Clear') ?>
+                            <?= $pendingTotal > 0 ? 'Attention' : ($stats['completed_ready_cashout'] > 0 ? 'Ready to Pay' : 'All Clear') ?>
                         </span>
                     </div>
-                    <span class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider block mt-2">Tasks Waiting</span>
+                    <span class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider block mt-2">
+                        <?= $pendingTotal > 0 ? 'Action Needed' : 'Cashouts Ready' ?>
+                    </span>
                     <div class="mt-1 text-base sm:text-xl lg:text-2xl font-black <?= $pendingTotal > 0 ? 'text-amber-600' : 'text-slate-800' ?> truncate">
-                        <?= $pendingTotal > 0 ? $pendingTotal . ' Pending' : number_format($stats['completed_ready_cashout']) . ' Ready' ?>
+                        <?php if ($pendingTotal > 0): ?>
+                            <?= $pendingTotal ?> Pending
+                        <?php elseif ($stats['completed_ready_cashout'] > 0): ?>
+                            <?= number_format($stats['completed_ready_cashout']) ?> to Pay
+                        <?php else: ?>
+                            0 to Pay
+                        <?php endif; ?>
                     </div>
                     <p class="text-[10px] sm:text-[11px] text-slate-500 mt-1 line-clamp-1">
-                        <?= $stats['pending_handovers'] ?> handovers &bull; <?= $stats['completed_ready_cashout'] ?> cashouts
+                        <?php if ($pendingTotal > 0): ?>
+                            <?= $stats['pending_handovers'] ?> handover<?= $stats['pending_handovers'] !== 1 ? 's' : '' ?> awaiting review
+                        <?php elseif ($stats['completed_ready_cashout'] > 0): ?>
+                            <?= number_format($stats['completed_ready_cashout']) ?> completed card<?= $stats['completed_ready_cashout'] !== 1 ? 's' : '' ?> awaiting cashout
+                        <?php else: ?>
+                            All completed cards have been paid out
+                        <?php endif; ?>
                     </p>
                 </div>
-                <a href="<?= $stats['pending_handovers'] > 0 ? 'daily_handover.php' : 'payouts.php' ?>" class="btn-touch mt-2.5 sm:mt-3 w-full py-2 px-2.5 sm:px-3 rounded-xl text-xs font-bold bg-purple-50 text-purple-800 hover:bg-purple-700 hover:text-white border border-purple-200 transition-all duration-150 flex items-center justify-center gap-1 shadow-2xs group">
-                    <span><?= $stats['pending_handovers'] > 0 ? 'Review Handovers' : 'Manage Cashouts' ?></span>
+                <a href="<?= $stats['pending_handovers'] > 0 ? 'daily_handover.php' : 'payouts.php' ?>" class="btn-touch mt-2.5 sm:mt-3 w-full py-2 px-2.5 sm:px-3 rounded-xl text-xs font-bold <?= $pendingTotal > 0 ? 'bg-amber-50 text-amber-800 hover:bg-amber-600 hover:text-white border border-amber-200' : 'bg-purple-50 text-purple-800 hover:bg-purple-700 hover:text-white border border-purple-200' ?> transition-all duration-150 flex items-center justify-center gap-1 shadow-2xs group">
+                    <span><?= $stats['pending_handovers'] > 0 ? 'Review Handovers' : 'Pay Out Customers' ?></span>
                     <i class="fa-solid fa-arrow-right text-[10px] group-hover:translate-x-0.5 transition-transform"></i>
                 </a>
             </div>
