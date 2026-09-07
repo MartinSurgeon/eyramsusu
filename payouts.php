@@ -133,7 +133,7 @@ require_once __DIR__ . '/includes/header.php';
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 section-card">
         <div>
             <h1 class="text-xl sm:text-2xl font-black text-steel_azure">Customer Payouts</h1>
-            <p class="text-xs sm:text-sm text-slate-500 mt-0.5">Manage cycle payouts, fee deductions, and cash disbursements.</p>
+            <p class="text-xs sm:text-sm text-slate-500 mt-0.5">Manage customer payouts, office fees, and money paid to clients.</p>
         </div>
         <div>
             <a href="request_payout.php" class="btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs sm:text-sm font-extrabold shadow-sm transition inline-flex items-center gap-1.5">
@@ -252,7 +252,7 @@ require_once __DIR__ . '/includes/header.php';
             </div>
             <div>
                 <h2 class="text-base font-bold text-slate-800">Completed Payout History</h2>
-                <p class="text-xs text-slate-500">Historical records of closed cards and disbursements.</p>
+                <p class="text-xs text-slate-500">Records of completed cards and money paid out to customers.</p>
             </div>
         </div>
 

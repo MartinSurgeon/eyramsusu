@@ -412,10 +412,10 @@ require_once __DIR__ . '/includes/header.php';
                 </div>
             </div>
             <?php if ($user['role'] === 'admin' && !empty($collectorDistribution)): ?>
-                <button type="button" onclick="toggleContributorsDrawer()" 
+                <button type="button" onclick="toggleCollectorsDrawer()" 
                         class="btn-touch px-4 py-2.5 bg-slate-50 hover:bg-steel_azure hover:text-white text-steel_azure border border-slate-200 hover:border-steel_azure text-xs font-bold rounded-xl transition-all duration-200 flex items-center gap-2 cursor-pointer group">
                     <i class="fa-solid fa-users-gear text-sm group-hover:scale-110 transition-transform"></i>
-                    <span>Contributors (<?= count($collectorDistribution) ?>)</span>
+                    <span>Collectors (<?= count($collectorDistribution) ?>)</span>
                     <i class="fa-solid fa-chevron-right text-[10px] group-hover:translate-x-0.5 transition-transform"></i>
                 </button>
             <?php endif; ?>
