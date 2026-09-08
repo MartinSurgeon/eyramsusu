@@ -201,7 +201,7 @@ function ariaCurrent($page, $currentPage)
                     </div>
                     <div class="sidebar-user-details flex-1 min-w-0">
                         <div class="text-xs font-bold text-white truncate"><?= htmlspecialchars($currentUser['full_name']) ?></div>
-                        <div class="text-[10px] text-slate-400 capitalize truncate"><?= $currentUser['role'] === 'admin' ? 'Office Manager' : 'Susu Collector' ?></div>
+                        <div class="text-[10px] text-slate-400 capitalize truncate"><?= $currentUser['role'] === 'admin' ? 'Administrator' : 'Susu Collector' ?></div>
                     </div>
                 </div>
 
@@ -358,7 +358,7 @@ function ariaCurrent($page, $currentPage)
 
                                 <div class="hidden sm:flex flex-col text-right">
                                     <span class="text-xs font-black text-white"><?= htmlspecialchars($currentUser['full_name']) ?></span>
-                                    <span class="text-[11px] text-cornflower_ocean-900 font-semibold capitalize"><?= $currentUser['role'] === 'admin' ? 'Office Manager' : 'Susu Collector' ?></span>
+                                    <span class="text-[11px] text-cornflower_ocean-900 font-semibold capitalize"><?= $currentUser['role'] === 'admin' ? 'Admin' : 'Susu Collector' ?></span>
                                 </div>
 
                                 <!-- Notification Bell & Interactive Drawer -->

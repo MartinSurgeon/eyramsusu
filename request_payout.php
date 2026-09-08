@@ -452,7 +452,7 @@ require_once __DIR__ . '/includes/header.php';
                         <i class="fa-solid fa-paper-plane text-sm"></i>
                         <span>Submit Payout Request for Admin Approval</span>
                     </button>
-                    <p class="text-[11px] text-slate-400 text-center mt-2 font-medium">Office manager will be notified in real time to approve and disburse cash.</p>
+                    <p class="text-[11px] text-slate-400 text-center mt-2 font-medium">Administrator will be notified in real time to approve and disburse cash.</p>
                 <?php endif; ?>
             </div>
 

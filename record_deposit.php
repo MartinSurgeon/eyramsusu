@@ -130,12 +130,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!isset($_POST['action']) || $_POST
 
             // Insert individual space records into deposits table
             if ($spacesToFill > 0) {
+                $nowTimestamp = date('Y-m-d H:i:s');
                 $stmtDep = $pdo->prepare("
-                    INSERT INTO deposits (card_id, customer_id, collector_id, space_number, amount, deposit_date) 
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    INSERT INTO deposits (card_id, customer_id, collector_id, space_number, amount, deposit_date, created_at) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                 ");
                 for ($s = $startSpace; $s <= $endSpace; $s++) {
-                    $stmtDep->execute([$card['id'], $customerId, $collectorId, $s, $dailyAmount, $depositDate]);
+                    $stmtDep->execute([$card['id'], $customerId, $collectorId, $s, $dailyAmount, $depositDate, $nowTimestamp]);
                 }
             }
 

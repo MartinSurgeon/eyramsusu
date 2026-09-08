@@ -121,7 +121,7 @@
                     <div>
                         <div class="text-sm font-extrabold text-slate-800"><?= htmlspecialchars($currentUser['full_name']) ?></div>
                         <div class="text-[11px] text-slate-500 font-medium capitalize">
-                            <?= $currentUser['role'] === 'admin' ? 'Office Manager' : 'Susu Collector' ?>
+                            <?= $currentUser['role'] === 'admin' ? 'Administrator' : 'Susu Collector' ?>
                         </div>
                     </div>
                 </div>
