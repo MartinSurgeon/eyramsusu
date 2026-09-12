@@ -57,6 +57,109 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     }
 }
 
+// Handle Adjust Card Daily Rate (Admin Only)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'adjust_card_rate') {
+    if ($user['role'] !== 'admin') {
+        set_flash_message('error', 'Only Administrators are authorized to adjust card daily rates.');
+        header("Location: view_card.php?id=" . $cardId);
+        exit;
+    }
+
+    // Check if card is already settled and paid out
+    $stmtCheckPaid = $pdo->prepare("SELECT status FROM payouts WHERE card_id = ? AND status = 'paid' LIMIT 1");
+    $stmtCheckPaid->execute([$cardId]);
+    if ($stmtCheckPaid->fetchColumn()) {
+        set_flash_message('error', 'Cannot adjust rate on a card that has already been settled and paid out.');
+        header("Location: view_card.php?id=" . $cardId);
+        exit;
+    }
+
+    $newDailyAmount = (float)($_POST['new_daily_amount'] ?? 0);
+    $recalculateDeposits = !empty($_POST['recalculate_deposits']);
+    $reason = trim($_POST['reason'] ?? '');
+
+    if ($newDailyAmount <= 0) {
+        set_flash_message('error', 'Please enter a valid daily savings rate greater than zero.');
+        header("Location: view_card.php?id=" . $cardId);
+        exit;
+    }
+
+    if (empty($reason)) {
+        set_flash_message('error', 'Please provide an audit reason for adjusting this card rate.');
+        header("Location: view_card.php?id=" . $cardId);
+        exit;
+    }
+
+    try {
+        $pdo->beginTransaction();
+
+        $oldRate = (float)$card['daily_amount'];
+        $spacesFilled = (int)$card['spaces_filled'];
+
+        if ($recalculateDeposits && $spacesFilled > 0) {
+            // Update all deposit space records for this card
+            $stmtUpdDep = $pdo->prepare("UPDATE deposits SET amount = ? WHERE card_id = ?");
+            $stmtUpdDep->execute([$newDailyAmount, $cardId]);
+
+            // Recalculate total saved based on filled spaces and new rate
+            $newTotalSaved = round($spacesFilled * $newDailyAmount, 2);
+
+            $stmtUpdCard = $pdo->prepare("UPDATE susu_cards SET daily_amount = ?, total_saved = ? WHERE id = ?");
+            $stmtUpdCard->execute([$newDailyAmount, $newTotalSaved, $cardId]);
+        } else {
+            // Only update daily rate without modifying past deposit amounts
+            $newTotalSaved = (float)$card['total_saved'];
+            $stmtUpdCard = $pdo->prepare("UPDATE susu_cards SET daily_amount = ? WHERE id = ?");
+            $stmtUpdCard->execute([$newDailyAmount, $cardId]);
+        }
+
+        // If there is a pending payout, recalculate its numbers
+        $stmtPendingPayout = $pdo->prepare("SELECT id FROM payouts WHERE card_id = ? AND status = 'pending' LIMIT 1");
+        $stmtPendingPayout->execute([$cardId]);
+        if ($pendingPayoutId = $stmtPendingPayout->fetchColumn()) {
+            $newFee = min($newDailyAmount, $newTotalSaved);
+            $newCustomerPayout = max(0, $newTotalSaved - $newFee) + (float)$card['change_balance'];
+            $stmtUpdPending = $pdo->prepare("
+                UPDATE payouts 
+                SET total_saved = ?, business_fee = ?, customer_payout = ? 
+                WHERE id = ?
+            ");
+            $stmtUpdPending->execute([$newTotalSaved, $newFee, $newCustomerPayout, $pendingPayoutId]);
+        }
+
+        // Audit Trail
+        $recalcNote = $recalculateDeposits ? "Recalculated {$spacesFilled} deposit space(s) to GH₵ " . number_format($newDailyAmount, 2) . " (New Total Saved: GH₵ " . number_format($newTotalSaved, 2) . ")" : "Past deposits unchanged";
+        log_audit_event(
+            $user['id'],
+            'adjust_card_rate',
+            "Adjusted Card #{$card['card_number']} rate for {$card['full_name']} (#{$card['account_number']}) from GH₵ " . number_format($oldRate, 2) . " to GH₵ " . number_format($newDailyAmount, 2) . ". {$recalcNote}. Reason: {$reason}"
+        );
+
+        // Notify Admin group
+        create_notification(
+            null,
+            'info',
+            "Card #{$card['card_number']} Rate Adjusted: {$card['full_name']}",
+            "Admin {$user['full_name']} updated Card #{$card['card_number']} daily rate from GH₵ " . number_format($oldRate, 2) . " to GH₵ " . number_format($newDailyAmount, 2) . ". Reason: {$reason}",
+            "view_card.php?id={$cardId}"
+        );
+
+        $pdo->commit();
+
+        set_flash_message('success', "Card #{$card['card_number']} rate successfully updated to " . format_money($newDailyAmount) . "! " . ($recalculateDeposits ? "All {$spacesFilled} space(s) recalculated." : ""));
+        header("Location: view_card.php?id=" . $cardId);
+        exit;
+
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        set_flash_message('error', 'Error adjusting card rate: ' . $e->getMessage());
+        header("Location: view_card.php?id=" . $cardId);
+        exit;
+    }
+}
+
 // Fetch all deposits recorded for this card, keyed by space_number
 $depositsList = get_card_deposits($cardId);
 $depositsBySpace = [];
@@ -120,14 +223,12 @@ require_once __DIR__ . '/includes/header.php';
                     <span>View Active Card #<?= $otherActiveCard['card_number'] ?></span>
                 </a>
             <?php elseif ($user['role'] === 'admin' || ($user['role'] === 'collector' && (int)$card['card_number'] >= 1)): ?>
-                <form method="POST" action="start_new_card.php" class="inline">
-                    <input type="hidden" name="customer_id" value="<?= $card['customer_id'] ?>">
-                    <input type="hidden" name="daily_amount" value="<?= $card['daily_amount'] ?>">
-                    <button type="submit" class="btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold px-4 py-1.5 shadow-2xs rounded-xl inline-flex items-center gap-1.5 cursor-pointer">
-                        <i class="fa-solid fa-circle-plus text-xs"></i>
-                        <span>+ Open Next Card (#<?= $card['card_number'] + 1 ?>)</span>
-                    </button>
-                </form>
+                <button type="button" 
+                        onclick="openNextCardModal(<?= (int)$card['customer_id'] ?>, <?= htmlspecialchars(json_encode($card['full_name']), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars(json_encode($card['account_number']), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars(json_encode($card['collector_name'] ?: 'Unassigned'), ENT_QUOTES, 'UTF-8') ?>, <?= (float)$card['daily_amount'] ?>, <?= (int)($card['card_number'] + 1) ?>)"
+                        class="btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold px-4 py-1.5 shadow-2xs rounded-xl inline-flex items-center gap-1.5 cursor-pointer">
+                    <i class="fa-solid fa-circle-plus text-xs"></i>
+                    <span>+ Open Next Card (#<?= $card['card_number'] + 1 ?>)</span>
+                </button>
             <?php endif; ?>
         </div>
     </div>
@@ -220,14 +321,12 @@ require_once __DIR__ . '/includes/header.php';
                 <?php endif; ?>
 
                 <?php if (($user['role'] === 'admin' || ($user['role'] === 'collector' && (int)$card['card_number'] >= 1)) && !$otherActiveCard): ?>
-                    <form method="POST" action="start_new_card.php" class="inline">
-                        <input type="hidden" name="customer_id" value="<?= $card['customer_id'] ?>">
-                        <input type="hidden" name="daily_amount" value="<?= $card['daily_amount'] ?>">
-                        <button type="submit" class="btn-touch bg-white hover:bg-slate-50 text-steel_azure border border-steel_azure text-xs font-bold px-4 py-2.5 rounded-xl transition inline-flex items-center gap-1.5 cursor-pointer">
-                            <i class="fa-solid fa-circle-plus text-xs"></i>
-                            <span>Open Next Card (#<?= $card['card_number'] + 1 ?>)</span>
-                        </button>
-                    </form>
+                    <button type="button" 
+                            onclick="openNextCardModal(<?= (int)$card['customer_id'] ?>, <?= htmlspecialchars(json_encode($card['full_name']), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars(json_encode($card['account_number']), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars(json_encode($card['collector_name'] ?: 'Unassigned'), ENT_QUOTES, 'UTF-8') ?>, <?= (float)$card['daily_amount'] ?>, <?= (int)($card['card_number'] + 1) ?>)"
+                            class="btn-touch bg-white hover:bg-slate-50 text-steel_azure border border-steel_azure text-xs font-bold px-4 py-2.5 rounded-xl transition inline-flex items-center gap-1.5 cursor-pointer">
+                        <i class="fa-solid fa-circle-plus text-xs"></i>
+                        <span>Open Next Card (#<?= $card['card_number'] + 1 ?>)</span>
+                    </button>
                 <?php endif; ?>
             </div>
         </div>
@@ -270,14 +369,12 @@ require_once __DIR__ . '/includes/header.php';
                 </div>
             </div>
             <?php if (($user['role'] === 'admin' || ($user['role'] === 'collector' && (int)$card['card_number'] >= 1)) && !$otherActiveCard): ?>
-                <form method="POST" action="start_new_card.php" class="flex-shrink-0">
-                    <input type="hidden" name="customer_id" value="<?= $card['customer_id'] ?>">
-                    <input type="hidden" name="daily_amount" value="<?= $card['daily_amount'] ?>">
-                    <button type="submit" class="btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold px-4 py-2 rounded-xl shadow-xs inline-flex items-center gap-1.5 cursor-pointer">
-                        <i class="fa-solid fa-circle-plus text-xs"></i>
-                        <span>+ Open Next Card (#<?= $card['card_number'] + 1 ?>)</span>
-                    </button>
-                </form>
+                <button type="button" 
+                        onclick="openNextCardModal(<?= (int)$card['customer_id'] ?>, <?= htmlspecialchars(json_encode($card['full_name']), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars(json_encode($card['account_number']), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars(json_encode($card['collector_name'] ?: 'Unassigned'), ENT_QUOTES, 'UTF-8') ?>, <?= (float)$card['daily_amount'] ?>, <?= (int)($card['card_number'] + 1) ?>)"
+                        class="btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold px-4 py-2 rounded-xl shadow-xs inline-flex items-center gap-1.5 cursor-pointer flex-shrink-0">
+                    <i class="fa-solid fa-circle-plus text-xs"></i>
+                    <span>+ Open Next Card (#<?= $card['card_number'] + 1 ?>)</span>
+                </button>
             <?php endif; ?>
         </div>
     <?php endif; ?>
@@ -323,7 +420,17 @@ require_once __DIR__ . '/includes/header.php';
             <!-- Financial Metrics Highlights -->
             <div class="flex flex-wrap sm:flex-nowrap gap-3 bg-platinum-800 p-3.5 rounded-xl border border-silver-600/70">
                 <div class="text-left sm:text-right pr-3 border-r border-silver-600">
-                    <div class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Agreed Daily Rate</div>
+                    <div class="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between gap-1.5">
+                        <span>Agreed Daily Rate</span>
+                        <?php if ($user['role'] === 'admin'): ?>
+                            <button type="button" onclick="openAdjustRateModal()" 
+                                    class="text-cornflower_ocean hover:text-steel_azure text-[10px] font-black inline-flex items-center gap-1 hover:underline cursor-pointer bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 shadow-2xs"
+                                    title="Adjust daily rate or recalculate deposits">
+                                <i class="fa-solid fa-pen-to-square text-[9px]"></i>
+                                <span>Edit</span>
+                            </button>
+                        <?php endif; ?>
+                    </div>
                     <div class="text-base sm:text-lg font-black text-steel_azure"><?= format_money($card['daily_amount']) ?></div>
                     <div class="text-[10px] text-slate-400">per space</div>
                 </div>
@@ -372,14 +479,12 @@ require_once __DIR__ . '/includes/header.php';
                     </div>
                 </div>
 
-                <form method="POST" action="start_new_card.php" class="flex-shrink-0">
-                    <input type="hidden" name="customer_id" value="<?= $card['customer_id'] ?>">
-                    <input type="hidden" name="daily_amount" value="<?= $card['daily_amount'] ?>">
-                    <button type="submit" class="btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold px-4 py-2.5 rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer">
-                        <i class="fa-solid fa-circle-plus text-xs"></i>
-                        <span>+ Open Card #<?= $card['card_number'] + 1 ?></span>
-                    </button>
-                </form>
+                <button type="button" 
+                        onclick="openNextCardModal(<?= (int)$card['customer_id'] ?>, <?= htmlspecialchars(json_encode($card['full_name']), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars(json_encode($card['account_number']), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars(json_encode($card['collector_name'] ?: 'Unassigned'), ENT_QUOTES, 'UTF-8') ?>, <?= (float)$card['daily_amount'] ?>, <?= (int)($card['card_number'] + 1) ?>)"
+                        class="btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold px-4 py-2.5 rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer flex-shrink-0">
+                    <i class="fa-solid fa-circle-plus text-xs"></i>
+                    <span>+ Open Card #<?= $card['card_number'] + 1 ?></span>
+                </button>
             </div>
         <?php endif; ?>
     </div>
@@ -524,13 +629,12 @@ require_once __DIR__ . '/includes/header.php';
 
                 <?php if (($user['role'] === 'admin' || ($user['role'] === 'collector' && (int)$card['card_number'] >= 1)) && !$otherActiveCard): ?>
                     <div class="mt-4 pt-3 border-t border-silver-600/60 flex justify-end">
-                        <form method="POST" action="start_new_card.php">
-                            <input type="hidden" name="customer_id" value="<?= $card['customer_id'] ?>">
-                            <input type="hidden" name="daily_amount" value="<?= $card['daily_amount'] ?>">
-                            <button type="submit" class="btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-bold px-4 py-2 shadow-sm cursor-pointer">
-                                + Open Card #<?= $card['card_number'] + 1 ?> for <?= htmlspecialchars($card['full_name']) ?>
-                            </button>
-                        </form>
+                        <button type="button" 
+                                onclick="openNextCardModal(<?= (int)$card['customer_id'] ?>, <?= htmlspecialchars(json_encode($card['full_name']), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars(json_encode($card['account_number']), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars(json_encode($card['collector_name'] ?: 'Unassigned'), ENT_QUOTES, 'UTF-8') ?>, <?= (float)$card['daily_amount'] ?>, <?= (int)($card['card_number'] + 1) ?>)"
+                                class="btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-bold px-4 py-2 shadow-sm cursor-pointer inline-flex items-center gap-1.5">
+                            <i class="fa-solid fa-circle-plus text-xs"></i>
+                            <span>+ Open Card #<?= $card['card_number'] + 1 ?> for <?= htmlspecialchars($card['full_name']) ?></span>
+                        </button>
                     </div>
                 <?php endif; ?>
             </div>
@@ -848,6 +952,8 @@ document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         closeCancelDepositModal();
         closeCashoutModal();
+        closeNextCardModal();
+        closeAdjustRateModal();
     }
 });
 
@@ -860,7 +966,392 @@ document.addEventListener('click', function(e) {
     if (cashoutModal && !cashoutModal.classList.contains('hidden') && e.target === cashoutModal) {
         closeCashoutModal();
     }
+    const nextCardModal = document.getElementById('open_next_card_modal');
+    if (nextCardModal && !nextCardModal.classList.contains('hidden') && e.target === nextCardModal) {
+        closeNextCardModal();
+    }
+    const adjModal = document.getElementById('adjust_rate_modal');
+    if (adjModal && !adjModal.classList.contains('hidden') && e.target === adjModal) {
+        closeAdjustRateModal();
+    }
+});
+
+// Next Card Rate Modal Functions
+function openNextCardModal(customerId, customerName, accountNumber, collectorName, defaultAmount, nextCardNum) {
+    const initials = (customerName || '--').split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
+    const avatar = document.getElementById('onc_avatar');
+    const nameEl = document.getElementById('onc_name');
+    const accEl = document.getElementById('onc_account');
+    const colEl = document.getElementById('onc_collector');
+    const badgeEl = document.getElementById('onc_badge');
+    const titleEl = document.getElementById('onc_modal_title');
+
+    if (avatar) avatar.textContent = initials;
+    if (nameEl) nameEl.textContent = customerName;
+    if (accEl) accEl.textContent = 'A/C: ' + accountNumber;
+    if (colEl) colEl.textContent = 'Collector: ' + collectorName;
+    if (badgeEl && nextCardNum) badgeEl.textContent = 'Card #' + nextCardNum;
+    if (titleEl && nextCardNum) titleEl.textContent = 'Open Next Susu Card #' + nextCardNum;
+
+    document.getElementById('onc_customer_id').value = customerId;
+
+    const def = parseFloat(defaultAmount) > 0 ? parseFloat(defaultAmount) : 20.00;
+    const amountInput = document.getElementById('onc_daily_amount');
+    if (amountInput) {
+        amountInput.value = def;
+        updateOncPreset(def);
+        updateOncPreview();
+    }
+
+    const modal = document.getElementById('open_next_card_modal');
+    const box = document.getElementById('onc_modal_box');
+    if (modal && modal.parentElement !== document.body) {
+        document.body.appendChild(modal);
+    }
+    document.body.classList.add('overflow-hidden');
+    modal.classList.remove('hidden');
+    requestAnimationFrame(() => {
+        box.classList.remove('scale-95');
+        box.classList.add('scale-100');
+    });
+}
+
+function closeNextCardModal() {
+    const modal = document.getElementById('open_next_card_modal');
+    const box = document.getElementById('onc_modal_box');
+    if (!modal) return;
+    document.body.classList.remove('overflow-hidden');
+    box.classList.remove('scale-100');
+    box.classList.add('scale-95');
+    setTimeout(() => modal.classList.add('hidden'), 150);
+}
+
+function updateOncPreset(amount) {
+    document.querySelectorAll('.onc-preset-btn').forEach(btn => {
+        const v = parseFloat(btn.getAttribute('data-amount'));
+        if (v === parseFloat(amount)) {
+            btn.classList.add('border-pumpkin_spice', 'bg-orange-50', 'text-pumpkin_spice');
+            btn.classList.remove('border-silver-600', 'bg-white', 'text-slate-700');
+        } else {
+            btn.classList.remove('border-pumpkin_spice', 'bg-orange-50', 'text-pumpkin_spice');
+            btn.classList.add('border-silver-600', 'bg-white', 'text-slate-700');
+        }
+    });
+}
+
+function updateOncPreview() {
+    const amount = parseFloat(document.getElementById('onc_daily_amount').value) || 0;
+    const hiddenInput = document.getElementById('onc_amount_hidden');
+    const confirmBtn = document.getElementById('onc_confirm_btn');
+    const preview = document.getElementById('onc_target_preview');
+    const previewRate = document.getElementById('onc_preview_rate');
+    const previewTotal = document.getElementById('onc_preview_total');
+
+    if (hiddenInput) hiddenInput.value = amount > 0 ? amount : '';
+
+    if (amount > 0) {
+        const total = amount * 31;
+        if (previewRate) previewRate.textContent = 'GH₵ ' + amount.toFixed(2);
+        if (previewTotal) previewTotal.textContent = 'GH₵ ' + total.toFixed(2);
+        if (preview) preview.style.display = 'flex';
+        if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.style.opacity = '1';
+            confirmBtn.style.cursor = 'pointer';
+        }
+    } else {
+        if (preview) preview.style.display = 'none';
+        if (confirmBtn) {
+            confirmBtn.disabled = true;
+            confirmBtn.style.opacity = '0.5';
+            confirmBtn.style.cursor = 'not-allowed';
+        }
+    }
+}
+
+// Adjust Rate Modal Functions (Admin Only)
+function openAdjustRateModal() {
+    const modal = document.getElementById('adjust_rate_modal');
+    const box = document.getElementById('adjust_rate_modal_box');
+    if (!modal) return;
+    if (modal.parentElement !== document.body) {
+        document.body.appendChild(modal);
+    }
+    document.body.classList.add('overflow-hidden');
+    modal.classList.remove('hidden');
+    requestAnimationFrame(() => {
+        box.classList.remove('scale-95');
+        box.classList.add('scale-100');
+    });
+}
+
+function closeAdjustRateModal() {
+    const modal = document.getElementById('adjust_rate_modal');
+    const box = document.getElementById('adjust_rate_modal_box');
+    if (!modal) return;
+    document.body.classList.remove('overflow-hidden');
+    box.classList.remove('scale-100');
+    box.classList.add('scale-95');
+    setTimeout(() => modal.classList.add('hidden'), 150);
+}
+
+// Attach event listeners
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.onc-preset-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const v = parseFloat(btn.getAttribute('data-amount'));
+            const input = document.getElementById('onc_daily_amount');
+            if (input) input.value = v;
+            updateOncPreset(v);
+            updateOncPreview();
+        });
+    });
+
+    const oncAmountInput = document.getElementById('onc_daily_amount');
+    if (oncAmountInput) {
+        oncAmountInput.addEventListener('input', () => {
+            updateOncPreset(parseFloat(oncAmountInput.value));
+            updateOncPreview();
+        });
+    }
+
+    document.querySelectorAll('.adj-preset-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const v = parseFloat(btn.getAttribute('data-amount'));
+            const input = document.getElementById('adj_daily_amount');
+            if (input) input.value = v;
+            document.querySelectorAll('.adj-preset-btn').forEach(b => {
+                b.classList.remove('border-steel_azure', 'bg-blue-50', 'text-steel_azure');
+                b.classList.add('border-silver-600', 'bg-white', 'text-slate-700');
+            });
+            btn.classList.add('border-steel_azure', 'bg-blue-50', 'text-steel_azure');
+            btn.classList.remove('border-silver-600', 'bg-white', 'text-slate-700');
+        });
+    });
 });
 </script>
+
+<!-- Open Next Susu Card Modal -->
+<div id="open_next_card_modal"
+     class="fixed inset-0 z-50 overflow-y-auto p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center min-h-screen"
+     role="dialog" aria-modal="true" aria-labelledby="onc_modal_title">
+    <div class="bg-white rounded-2xl border border-silver-600 shadow-2xl max-w-md w-full max-h-[92vh] flex flex-col overflow-hidden my-auto transform transition-all scale-95 duration-200"
+         id="onc_modal_box">
+
+        <!-- Modal Header (Pinned) -->
+        <div class="p-3.5 sm:p-4 bg-gradient-to-r from-pumpkin_spice to-pumpkin_spice-600 text-white flex items-center justify-between flex-shrink-0">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
+                    <i class="fa-solid fa-address-card text-sm sm:text-base"></i>
+                </div>
+                <div>
+                    <h3 id="onc_modal_title" class="font-extrabold text-xs sm:text-sm leading-tight">Open Next Susu Passbook</h3>
+                    <p class="text-[10px] sm:text-[11px] text-white/70 mt-0.5">31-Space Savings Passbook</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeNextCardModal()"
+                    class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white/10 hover:bg-white/25 text-white flex items-center justify-center transition flex-shrink-0 cursor-pointer"
+                    title="Close" aria-label="Close modal">
+                <i class="fa-solid fa-xmark text-sm"></i>
+            </button>
+        </div>
+
+        <!-- Form Wrapper with Scrollable Body & Sticky Footer -->
+        <form id="onc_form" method="POST" action="start_new_card.php" class="flex-1 flex flex-col min-h-0 overflow-hidden m-0">
+            <input type="hidden" id="onc_customer_id" name="customer_id" value="">
+            <input type="hidden" id="onc_amount_hidden" name="daily_amount" value="">
+
+            <!-- Scrollable Modal Body -->
+            <div class="p-3.5 sm:p-5 space-y-3 sm:space-y-4 overflow-y-auto overscroll-contain flex-1">
+
+                <!-- Customer Identity -->
+                <div class="bg-slate-50 border border-slate-200 rounded-xl p-2.5 sm:p-3 flex items-center gap-2.5 sm:gap-3">
+                    <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-steel_azure text-white font-black flex items-center justify-center text-xs sm:text-sm flex-shrink-0 shadow-xs"
+                         id="onc_avatar">--</div>
+                    <div class="flex-1 min-w-0">
+                        <div class="text-xs sm:text-sm font-extrabold text-slate-800 truncate" id="onc_name">-</div>
+                        <div class="text-[10px] sm:text-[11px] text-slate-500 font-mono font-semibold truncate" id="onc_account">-</div>
+                        <div class="text-[9px] sm:text-[10px] text-slate-400 mt-0.5 truncate" id="onc_collector">-</div>
+                    </div>
+                    <span class="text-[9px] sm:text-[10px] font-black text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-0.5 sm:py-1 rounded-lg whitespace-nowrap flex-shrink-0" id="onc_badge">
+                        Next Cycle
+                    </span>
+                </div>
+
+                <!-- Daily Rate Picker -->
+                <div>
+                    <label class="block text-[11px] sm:text-xs font-black text-slate-700 uppercase tracking-wider mb-2">
+                        Agreed Daily Savings Rate (GH₵) *
+                    </label>
+
+                    <!-- 1-Tap Quick Presets: 4 compact columns on all screens -->
+                    <div class="grid grid-cols-4 gap-1.5 sm:gap-2 mb-2.5">
+                        <?php foreach ([10, 20, 50, 100] as $preset): ?>
+                            <button type="button"
+                                    class="onc-preset-btn py-2 text-xs font-extrabold rounded-xl border border-silver-600 bg-white text-slate-700 hover:border-pumpkin_spice hover:bg-orange-50 hover:text-pumpkin_spice transition active:scale-95 cursor-pointer"
+                                    data-amount="<?= $preset ?>">
+                                GH₵ <?= $preset ?>
+                            </button>
+                        <?php endforeach; ?>
+                    </div>
+
+                    <!-- Custom Amount Input -->
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 font-black text-xs sm:text-sm">GH₵</span>
+                        <input type="number" id="onc_daily_amount" inputmode="numeric" step="1" min="1" max="9999"
+                               class="w-full pl-11 pr-3 py-2 sm:py-2.5 rounded-xl border border-silver-600 focus:border-pumpkin_spice focus:ring-2 focus:ring-pumpkin_spice/30 outline-none text-sm font-black text-slate-800 transition"
+                               placeholder="Type agreed daily rate">
+                    </div>
+                </div>
+
+                <!-- Live 31-Space Target Calculator -->
+                <div id="onc_target_preview"
+                     class="bg-gradient-to-r from-pumpkin_spice/10 to-orange-50 border border-pumpkin_spice/20 rounded-xl px-3 py-2.5 sm:px-4 sm:py-3 flex items-center justify-between"
+                     style="display:none">
+                    <div>
+                        <div class="text-[9px] sm:text-[10px] text-slate-500 font-bold uppercase tracking-wider">31 Spaces × <span id="onc_preview_rate">GH₵ 0.00</span></div>
+                        <div class="text-base sm:text-lg font-black text-pumpkin_spice" id="onc_preview_total">GH₵ 0.00</div>
+                        <div class="text-[9px] sm:text-[10px] text-slate-400 font-medium">Full Card Savings Target</div>
+                    </div>
+                    <i class="fa-solid fa-piggy-bank text-2xl sm:text-3xl text-pumpkin_spice/25"></i>
+                </div>
+            </div>
+
+            <!-- Sticky Pinned Footer -->
+            <div class="p-3 sm:p-4 bg-slate-50 border-t border-silver-600/70 flex items-center gap-2.5 flex-shrink-0">
+                <button type="button" onclick="closeNextCardModal()"
+                        class="flex-1 py-2.5 px-3 sm:px-4 bg-white text-slate-600 hover:bg-platinum-800 border border-silver-600 text-xs sm:text-sm font-bold rounded-xl transition cursor-pointer">
+                    Cancel
+                </button>
+                <button type="submit" id="onc_confirm_btn"
+                        class="flex-1 py-2.5 px-3 sm:px-4 bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs sm:text-sm font-extrabold rounded-xl shadow-sm transition flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer"
+                        style="opacity:0.5;cursor:not-allowed" disabled>
+                    <i class="fa-solid fa-circle-check text-xs sm:text-sm"></i>
+                    <span>Confirm &amp; Open</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<?php if ($user['role'] === 'admin'): ?>
+<!-- Adjust Card Daily Rate Modal (Admin Only) -->
+<div id="adjust_rate_modal"
+     class="fixed inset-0 z-50 overflow-y-auto p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center min-h-screen"
+     role="dialog" aria-modal="true" aria-labelledby="adjust_rate_modal_title">
+    <div class="bg-white rounded-2xl border border-silver-600 shadow-2xl max-w-md w-full max-h-[92vh] flex flex-col overflow-hidden my-auto transform transition-all scale-95 duration-200"
+         id="adjust_rate_modal_box">
+
+        <!-- Header (Pinned) -->
+        <div class="p-3.5 sm:p-4 bg-gradient-to-r from-steel_azure to-steel_azure-400 text-white flex items-center justify-between flex-shrink-0">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
+                    <i class="fa-solid fa-pen-ruler text-sm sm:text-base"></i>
+                </div>
+                <div>
+                    <h3 id="adjust_rate_modal_title" class="font-extrabold text-xs sm:text-sm leading-tight">Adjust Agreed Daily Rate</h3>
+                    <p class="text-[10px] sm:text-[11px] text-white/70 mt-0.5">Card #<?= $card['card_number'] ?> &bull; <?= htmlspecialchars($card['full_name']) ?></p>
+                </div>
+            </div>
+            <button type="button" onclick="closeAdjustRateModal()"
+                    class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white/10 hover:bg-white/25 text-white flex items-center justify-center transition flex-shrink-0 cursor-pointer"
+                    title="Close" aria-label="Close modal">
+                <i class="fa-solid fa-xmark text-sm"></i>
+            </button>
+        </div>
+
+        <!-- Form Body (Scrollable with Sticky Footer) -->
+        <form method="POST" action="view_card.php?id=<?= $cardId ?>" class="flex-1 flex flex-col min-h-0 overflow-hidden m-0">
+            <input type="hidden" name="action" value="adjust_card_rate">
+
+            <div class="p-3.5 sm:p-5 space-y-3 sm:space-y-4 overflow-y-auto overscroll-contain flex-1">
+                <!-- Context Banner -->
+                <div class="p-2.5 sm:p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 leading-relaxed flex items-start gap-2 sm:gap-2.5">
+                    <i class="fa-solid fa-circle-info text-blue-500 text-xs sm:text-sm mt-0.5 flex-shrink-0"></i>
+                    <div class="text-[11px] sm:text-xs">
+                        Use this tool to correct an agreed rate entered erroneously (e.g. client upgraded to GH₵ 20 but card was opened at GH₵ 10).
+                    </div>
+                </div>
+
+                <!-- Current Rate Display -->
+                <div class="flex items-center justify-between p-2.5 sm:p-3 bg-slate-50 border border-silver-600/70 rounded-xl">
+                    <div>
+                        <span class="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Current Card Rate</span>
+                        <span class="text-xs sm:text-sm font-black text-slate-700"><?= format_money($card['daily_amount']) ?> / space</span>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Spaces Stamped</span>
+                        <span class="text-xs sm:text-sm font-black text-steel_azure"><?= $card['spaces_filled'] ?> / <?= $card['total_spaces'] ?></span>
+                    </div>
+                </div>
+
+                <!-- New Daily Rate Input -->
+                <div>
+                    <label class="block text-[11px] sm:text-xs font-black text-slate-700 uppercase tracking-wider mb-2">
+                        New Agreed Daily Rate (GH₵) *
+                    </label>
+
+                    <!-- Quick Presets -->
+                    <div class="grid grid-cols-4 gap-1.5 sm:gap-2 mb-2.5">
+                        <?php foreach ([10, 20, 50, 100] as $preset): ?>
+                            <button type="button"
+                                    class="adj-preset-btn py-2 text-xs font-extrabold rounded-xl border border-silver-600 bg-white text-slate-700 hover:border-steel_azure hover:bg-blue-50 hover:text-steel_azure transition active:scale-95 cursor-pointer"
+                                    data-amount="<?= $preset ?>">
+                                GH₵ <?= $preset ?>
+                            </button>
+                        <?php endforeach; ?>
+                    </div>
+
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 font-black text-xs sm:text-sm">GH₵</span>
+                        <input type="number" id="adj_daily_amount" name="new_daily_amount" step="1" min="1" max="9999" required
+                               class="w-full pl-11 pr-3 py-2 sm:py-2.5 rounded-xl border border-silver-600 focus:border-steel_azure focus:ring-2 focus:ring-steel_azure/30 outline-none text-sm font-black text-slate-800 transition"
+                               value="<?= (float)$card['daily_amount'] == 10 ? '20' : (float)$card['daily_amount'] ?>">
+                    </div>
+                </div>
+
+                <!-- Recalculate Past Deposits Checkbox -->
+                <?php if ((int)$card['spaces_filled'] > 0): ?>
+                    <div class="p-2.5 sm:p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1">
+                        <label class="flex items-start gap-2.5 cursor-pointer">
+                            <input type="checkbox" name="recalculate_deposits" value="1" checked
+                                   class="w-4 h-4 mt-0.5 rounded border-slate-300 text-pumpkin_spice focus:ring-pumpkin_spice accent-pumpkin_spice cursor-pointer">
+                            <div class="text-[11px] sm:text-xs text-amber-950 font-bold">
+                                Recalculate all <?= $card['spaces_filled'] ?> recorded space(s) to new rate
+                                <p class="text-[10px] sm:text-[11px] text-amber-800 font-normal mt-0.5">
+                                    Updates each past deposit record on this card to the new rate, adjusting Total Saved to match (e.g. <?= $card['spaces_filled'] ?> spaces × new rate).
+                                </p>
+                            </div>
+                        </label>
+                    </div>
+                <?php endif; ?>
+
+                <!-- Audit Reason Field -->
+                <div>
+                    <label class="block text-[11px] sm:text-xs font-bold text-slate-700 mb-1">
+                        Audit Reason / Note *
+                    </label>
+                    <textarea name="reason" rows="2" required
+                              class="w-full px-3 py-2 rounded-xl border border-silver-600 focus:border-steel_azure outline-none text-xs text-slate-800 transition"
+                              placeholder="e.g. Client upgraded to GH₵ 20 plan on Card 2; admin omitted rate change at card opening.">Client upgraded to GH₵ 20 plan; corrected admin omission at card opening.</textarea>
+                </div>
+            </div>
+
+            <!-- Sticky Pinned Footer -->
+            <div class="p-3 sm:p-4 bg-slate-50 border-t border-silver-600/70 flex items-center gap-2.5 flex-shrink-0">
+                <button type="button" onclick="closeAdjustRateModal()"
+                        class="flex-1 py-2.5 px-3 sm:px-4 bg-white text-slate-600 hover:bg-platinum-800 border border-silver-600 text-xs sm:text-sm font-bold rounded-xl transition cursor-pointer">
+                    Cancel
+                </button>
+                <button type="submit"
+                        class="flex-1 py-2.5 px-3 sm:px-4 bg-steel_azure hover:bg-steel_azure-400 text-white text-xs sm:text-sm font-extrabold rounded-xl shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer">
+                    <i class="fa-solid fa-check text-xs"></i>
+                    <span>Apply Adjustment</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+<?php endif; ?>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

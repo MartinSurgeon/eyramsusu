@@ -1131,103 +1131,104 @@ document.addEventListener('click', function(e) {
 <?php if ($user['role'] === 'admin'): ?>
 <!-- Open New Susu Card Confirmation Modal -->
 <div id="open_card_modal"
-     class="fixed inset-0 z-50 overflow-y-auto flex items-start sm:items-center justify-center p-3 sm:p-4 pt-16 sm:pt-4 bg-slate-900/60 backdrop-blur-sm hidden"
+     class="fixed inset-0 z-50 overflow-y-auto p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center min-h-screen"
      role="dialog" aria-modal="true" aria-labelledby="open_card_modal_title">
-    <div class="bg-white rounded-2xl border border-silver-600 shadow-2xl max-w-md w-full overflow-hidden transform transition-all scale-95 duration-200 my-auto"
+    <div class="bg-white rounded-2xl border border-silver-600 shadow-2xl max-w-md w-full max-h-[92vh] flex flex-col overflow-hidden my-auto transform transition-all scale-95 duration-200"
          id="open_card_modal_box">
 
-        <!-- Modal Header -->
-        <div class="p-4 bg-gradient-to-r from-pumpkin_spice to-pumpkin_spice-600 text-white flex items-center justify-between">
+        <!-- Modal Header (Pinned) -->
+        <div class="p-3.5 sm:p-4 bg-gradient-to-r from-pumpkin_spice to-pumpkin_spice-600 text-white flex items-center justify-between flex-shrink-0">
             <div class="flex items-center gap-2.5">
-                <div class="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
-                    <i class="fa-solid fa-address-card text-base"></i>
+                <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
+                    <i class="fa-solid fa-address-card text-sm sm:text-base"></i>
                 </div>
                 <div>
-                    <h3 id="open_card_modal_title" class="font-extrabold text-sm leading-tight">Open New Susu Passbook</h3>
-                    <p class="text-[11px] text-white/70 mt-0.5">31-Space Savings Card</p>
+                    <h3 id="open_card_modal_title" class="font-extrabold text-xs sm:text-sm leading-tight">Open New Susu Passbook</h3>
+                    <p class="text-[10px] sm:text-[11px] text-white/70 mt-0.5">31-Space Savings Card</p>
                 </div>
             </div>
             <button type="button" onclick="closeNewCardModal()"
-                    class="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/25 text-white flex items-center justify-center transition flex-shrink-0"
+                    class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white/10 hover:bg-white/25 text-white flex items-center justify-center transition flex-shrink-0 cursor-pointer"
                     title="Close" aria-label="Close modal">
                 <i class="fa-solid fa-xmark text-sm"></i>
             </button>
         </div>
 
-        <!-- Modal Body -->
-        <div class="p-4 sm:p-5 space-y-4">
+        <!-- Form Wrapper with Scrollable Body & Sticky Footer -->
+        <form id="open_card_form" method="POST" action="start_new_card.php" class="flex-1 flex flex-col min-h-0 overflow-hidden m-0">
+            <input type="hidden" id="oc_customer_id" name="customer_id" value="">
+            <input type="hidden" id="oc_amount_hidden" name="daily_amount" value="">
 
-            <!-- Customer Identity Review Card -->
-            <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-steel_azure text-white font-black flex items-center justify-center text-sm flex-shrink-0 shadow-xs"
-                     id="oc_avatar">--</div>
-                <div class="flex-1 min-w-0">
-                    <div class="text-sm font-extrabold text-slate-800 truncate" id="oc_name">-</div>
-                    <div class="text-[11px] text-slate-500 font-mono font-semibold" id="oc_account">-</div>
-                    <div class="text-[10px] text-slate-400 mt-0.5" id="oc_collector">-</div>
-                </div>
-                <span class="text-[10px] font-black text-amber-700 bg-amber-100 border border-amber-200 px-2 py-1 rounded-lg whitespace-nowrap flex-shrink-0">
-                    No Active Card
-                </span>
-            </div>
+            <!-- Scrollable Modal Body -->
+            <div class="p-3.5 sm:p-5 space-y-3 sm:space-y-4 overflow-y-auto overscroll-contain flex-1">
 
-            <!-- Daily Contribution Picker -->
-            <div>
-                <label class="block text-xs font-black text-slate-700 uppercase tracking-wider mb-2.5">
-                    Daily Savings Amount (GH₵)
-                </label>
-
-                <!-- 1-Tap Quick Presets: 2 cols on mobile, 4 on desktop (Fitts's Law) -->
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-                    <?php foreach ([10, 20, 50, 100] as $preset): ?>
-                        <button type="button"
-                                class="oc-preset-btn py-3 sm:py-2 text-sm sm:text-xs font-extrabold rounded-xl border border-silver-600 bg-white text-slate-700 hover:border-pumpkin_spice hover:bg-orange-50 hover:text-pumpkin_spice transition active:scale-95"
-                                data-amount="<?= $preset ?>">
-                            GH₵ <?= $preset ?>
-                        </button>
-                    <?php endforeach; ?>
+                <!-- Customer Identity Review Card -->
+                <div class="bg-slate-50 border border-slate-200 rounded-xl p-2.5 sm:p-3 flex items-center gap-2.5 sm:gap-3">
+                    <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-steel_azure text-white font-black flex items-center justify-center text-xs sm:text-sm flex-shrink-0 shadow-xs"
+                         id="oc_avatar">--</div>
+                    <div class="flex-1 min-w-0">
+                        <div class="text-xs sm:text-sm font-extrabold text-slate-800 truncate" id="oc_name">-</div>
+                        <div class="text-[10px] sm:text-[11px] text-slate-500 font-mono font-semibold truncate" id="oc_account">-</div>
+                        <div class="text-[9px] sm:text-[10px] text-slate-400 mt-0.5 truncate" id="oc_collector">-</div>
+                    </div>
+                    <span class="text-[9px] sm:text-[10px] font-black text-amber-700 bg-amber-100 border border-amber-200 px-2 py-0.5 sm:py-1 rounded-lg whitespace-nowrap flex-shrink-0">
+                        No Active Card
+                    </span>
                 </div>
 
-                <!-- Custom Amount Input -->
-                <div class="relative">
-                    <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400 font-black text-sm">GH₵</span>
-                    <input type="number" id="oc_daily_amount" inputmode="numeric" name="daily_amount"
-                           step="1" min="1" max="9999"
-                           class="w-full pl-12 pr-4 py-3 sm:py-2.5 rounded-xl border border-silver-600 focus:border-pumpkin_spice focus:ring-2 focus:ring-pumpkin_spice/30 outline-none text-base sm:text-sm font-black text-slate-800 transition"
-                           placeholder="Or type a custom amount">
-                </div>
-            </div>
-
-            <!-- Live 31-Space Target Calculator -->
-            <div id="oc_target_preview"
-                 class="bg-gradient-to-r from-pumpkin_spice/10 to-orange-50 border border-pumpkin_spice/20 rounded-xl px-4 py-3 flex items-center justify-between"
-                 style="display:none">
+                <!-- Daily Contribution Picker -->
                 <div>
-                    <div class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">31 Spaces × <span id="oc_preview_rate">GH₵ 0.00</span></div>
-                    <div class="text-xl sm:text-lg font-black text-pumpkin_spice" id="oc_preview_total">GH₵ 0.00</div>
-                    <div class="text-[10px] text-slate-400 font-medium">Total Savings Target</div>
+                    <label class="block text-[11px] sm:text-xs font-black text-slate-700 uppercase tracking-wider mb-2">
+                        Daily Savings Amount (GH₵)
+                    </label>
+
+                    <!-- 1-Tap Quick Presets: 4 compact columns on all screens -->
+                    <div class="grid grid-cols-4 gap-1.5 sm:gap-2 mb-2.5">
+                        <?php foreach ([10, 20, 50, 100] as $preset): ?>
+                            <button type="button"
+                                    class="oc-preset-btn py-2 text-xs font-extrabold rounded-xl border border-silver-600 bg-white text-slate-700 hover:border-pumpkin_spice hover:bg-orange-50 hover:text-pumpkin_spice transition active:scale-95 cursor-pointer"
+                                    data-amount="<?= $preset ?>">
+                                GH₵ <?= $preset ?>
+                            </button>
+                        <?php endforeach; ?>
+                    </div>
+
+                    <!-- Custom Amount Input -->
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 font-black text-xs sm:text-sm">GH₵</span>
+                        <input type="number" id="oc_daily_amount" inputmode="numeric" step="1" min="1" max="9999"
+                               class="w-full pl-11 pr-3 py-2 sm:py-2.5 rounded-xl border border-silver-600 focus:border-pumpkin_spice focus:ring-2 focus:ring-pumpkin_spice/30 outline-none text-sm font-black text-slate-800 transition"
+                               placeholder="Or enter custom rate">
+                    </div>
                 </div>
-                <i class="fa-solid fa-piggy-bank text-4xl sm:text-3xl text-pumpkin_spice/25"></i>
+
+                <!-- Live 31-Space Target Calculator -->
+                <div id="oc_target_preview"
+                     class="bg-gradient-to-r from-pumpkin_spice/10 to-orange-50 border border-pumpkin_spice/20 rounded-xl px-3 py-2.5 sm:px-4 sm:py-3 flex items-center justify-between"
+                     style="display:none">
+                    <div>
+                        <div class="text-[9px] sm:text-[10px] text-slate-500 font-bold uppercase tracking-wider">31 Spaces × <span id="oc_preview_rate">GH₵ 0.00</span></div>
+                        <div class="text-base sm:text-lg font-black text-pumpkin_spice" id="oc_preview_total">GH₵ 0.00</div>
+                        <div class="text-[9px] sm:text-[10px] text-slate-400 font-medium">Total Savings Target</div>
+                    </div>
+                    <i class="fa-solid fa-piggy-bank text-2xl sm:text-3xl text-pumpkin_spice/25"></i>
+                </div>
             </div>
 
-            <!-- Action Buttons -->
-            <form id="open_card_form" method="POST" action="start_new_card.php">
-                <input type="hidden" id="oc_customer_id" name="customer_id" value="">
-                <input type="hidden" id="oc_amount_hidden" name="daily_amount" value="">
-                <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 pt-1">
-                    <button type="button" onclick="closeNewCardModal()"
-                            class="flex-1 py-3 sm:py-2.5 px-4 bg-white text-slate-600 hover:bg-platinum-800 border border-silver-600 text-sm font-bold rounded-xl transition order-2 sm:order-1">
-                        Cancel
-                    </button>
-                    <button type="submit" id="oc_confirm_btn"
-                            class="flex-1 py-3 sm:py-2.5 px-4 bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-sm font-extrabold rounded-xl shadow-sm transition flex items-center justify-center gap-2 order-1 sm:order-2"
-                            style="opacity:0.5;cursor:not-allowed" disabled>
-                        <i class="fa-solid fa-circle-check text-sm"></i>
-                        <span>Confirm &amp; Open Card</span>
-                    </button>
-                </div>
-            </form>
-        </div>
+            <!-- Sticky Pinned Footer -->
+            <div class="p-3 sm:p-4 bg-slate-50 border-t border-silver-600/70 flex items-center gap-2.5 flex-shrink-0">
+                <button type="button" onclick="closeNewCardModal()"
+                        class="flex-1 py-2.5 px-3 sm:px-4 bg-white text-slate-600 hover:bg-platinum-800 border border-silver-600 text-xs sm:text-sm font-bold rounded-xl transition cursor-pointer">
+                    Cancel
+                </button>
+                <button type="submit" id="oc_confirm_btn"
+                        class="flex-1 py-2.5 px-3 sm:px-4 bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs sm:text-sm font-extrabold rounded-xl shadow-sm transition flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer"
+                        style="opacity:0.5;cursor:not-allowed" disabled>
+                    <i class="fa-solid fa-circle-check text-xs sm:text-sm"></i>
+                    <span>Confirm &amp; Open</span>
+                </button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -1247,29 +1248,22 @@ function openNewCardModal(customerId, customerName, accountNumber, collectorName
     // Set hidden customer ID
     document.getElementById('oc_customer_id').value = customerId;
 
-    // Set default daily amount
+    // Set default daily amount (ensure fallback to 20 if 0 or empty)
+    const def = parseFloat(defaultAmount) > 0 ? parseFloat(defaultAmount) : 20.00;
     const amountInput = document.getElementById('oc_daily_amount');
     if (amountInput) {
-        amountInput.value = defaultAmount > 0 ? defaultAmount : '';
-        updateOcPreset(defaultAmount);
+        amountInput.value = def;
+        updateOcPreset(def);
         updateOcPreview();
     }
 
-    // Highlight the matching preset button (if any)
-    document.querySelectorAll('.oc-preset-btn').forEach(btn => {
-        const v = parseFloat(btn.getAttribute('data-amount'));
-        if (v === parseFloat(defaultAmount)) {
-            btn.classList.add('border-pumpkin_spice', 'bg-orange-50', 'text-pumpkin_spice');
-            btn.classList.remove('border-silver-600', 'bg-white', 'text-slate-700');
-        } else {
-            btn.classList.remove('border-pumpkin_spice', 'bg-orange-50', 'text-pumpkin_spice');
-            btn.classList.add('border-silver-600', 'bg-white', 'text-slate-700');
-        }
-    });
-
-    // Show modal
+    // Show modal & move to body to prevent stacking clipping
     const modal = document.getElementById('open_card_modal');
     const box   = document.getElementById('open_card_modal_box');
+    if (modal && modal.parentElement !== document.body) {
+        document.body.appendChild(modal);
+    }
+    document.body.classList.add('overflow-hidden');
     modal.classList.remove('hidden');
     requestAnimationFrame(() => {
         box.classList.remove('scale-95');
@@ -1281,6 +1275,7 @@ function closeNewCardModal() {
     const modal = document.getElementById('open_card_modal');
     const box   = document.getElementById('open_card_modal_box');
     if (!modal) return;
+    document.body.classList.remove('overflow-hidden');
     box.classList.remove('scale-100');
     box.classList.add('scale-95');
     setTimeout(() => modal.classList.add('hidden'), 150);
@@ -1334,7 +1329,8 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.oc-preset-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const v = parseFloat(btn.getAttribute('data-amount'));
-            document.getElementById('oc_daily_amount').value = v;
+            const input = document.getElementById('oc_daily_amount');
+            if (input) input.value = v;
             updateOcPreset(v);
             updateOcPreview();
         });

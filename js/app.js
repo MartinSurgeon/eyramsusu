@@ -418,13 +418,9 @@ function initCustomerFilter() {
                     <div class="flex items-center gap-2">
                         <span class="text-xs text-amber-600 font-semibold">No card yet</span>
                         ${userRole === 'admin' ? `
-                            <form method="POST" action="start_new_card.php" class="inline">
-                                <input type="hidden" name="customer_id" value="${c.id}">
-                                <input type="hidden" name="daily_amount" value="${c.daily_amount > 0 ? c.daily_amount : 20.00}">
-                                <button type="submit" class="px-2 py-0.5 bg-pumpkin_spice-900 hover:bg-pumpkin_spice text-pumpkin_spice hover:text-white border border-pumpkin_spice text-[10px] font-bold rounded-md transition cursor-pointer">
-                                    + Open
-                                </button>
-                            </form>
+                            <button type="button" onclick="openNewCardModal(${c.id}, ${JSON.stringify(c.full_name || '').replace(/"/g, '&quot;')}, ${JSON.stringify(c.account_number || '').replace(/"/g, '&quot;')}, ${JSON.stringify(c.collector_name || 'Unassigned').replace(/"/g, '&quot;')}, ${c.daily_amount > 0 ? c.daily_amount : 20.00})" class="px-2 py-0.5 bg-pumpkin_spice-900 hover:bg-pumpkin_spice text-pumpkin_spice hover:text-white border border-pumpkin_spice text-[10px] font-bold rounded-md transition cursor-pointer">
+                                + Open
+                            </button>
                         ` : ''}
                     </div>
                 `;
@@ -477,14 +473,10 @@ function initCustomerFilter() {
                 }
                 if (userRole === 'admin') {
                     actionsHtml += `
-                        <form method="POST" action="start_new_card.php" class="inline">
-                            <input type="hidden" name="customer_id" value="${c.id}">
-                            <input type="hidden" name="daily_amount" value="${c.daily_amount > 0 ? c.daily_amount : 20.00}">
-                            <button type="submit" class="btn-touch px-3 py-1.5 bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold rounded-xl shadow-2xs transition inline-flex items-center gap-1.5 cursor-pointer">
-                                <i class="fa-solid fa-circle-plus text-xs"></i>
-                                <span>+ Open Card</span>
-                            </button>
-                        </form>
+                        <button type="button" onclick="openNewCardModal(${c.id}, ${JSON.stringify(c.full_name || '').replace(/"/g, '&quot;')}, ${JSON.stringify(c.account_number || '').replace(/"/g, '&quot;')}, ${JSON.stringify(c.collector_name || 'Unassigned').replace(/"/g, '&quot;')}, ${c.daily_amount > 0 ? c.daily_amount : 20.00})" class="btn-touch px-3 py-1.5 bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold rounded-xl shadow-2xs transition inline-flex items-center gap-1.5 cursor-pointer">
+                            <i class="fa-solid fa-circle-plus text-xs"></i>
+                            <span>+ Open Card</span>
+                        </button>
                     `;
                 }
             }
@@ -661,14 +653,10 @@ function initCustomerFilter() {
                 }
                 if (userRole === 'admin') {
                     mobileActions += `
-                        <form method="POST" action="start_new_card.php" class="flex-1">
-                            <input type="hidden" name="customer_id" value="${c.id}">
-                            <input type="hidden" name="daily_amount" value="${c.daily_amount > 0 ? c.daily_amount : 20.00}">
-                            <button type="submit" class="w-full btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer">
-                                <i class="fa-solid fa-circle-plus text-xs"></i>
-                                <span>+ Open Susu Card</span>
-                            </button>
-                        </form>
+                        <button type="button" onclick="openNewCardModal(${c.id}, ${JSON.stringify(c.full_name || '').replace(/"/g, '&quot;')}, ${JSON.stringify(c.account_number || '').replace(/"/g, '&quot;')}, ${JSON.stringify(c.collector_name || 'Unassigned').replace(/"/g, '&quot;')}, ${c.daily_amount > 0 ? c.daily_amount : 20.00})" class="w-full btn-touch bg-pumpkin_spice hover:bg-pumpkin_spice-400 text-white text-xs font-extrabold py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer">
+                            <i class="fa-solid fa-circle-plus text-xs"></i>
+                            <span>+ Open Susu Card</span>
+                        </button>
                     `;
                 }
             }
